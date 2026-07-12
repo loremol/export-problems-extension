@@ -1,0 +1,120 @@
+{
+  "name": "export-problems-to-markdown",
+  "displayName": "Export Problems to Markdown",
+  "description": "Export all diagnostics from the Problems panel (errors, warnings, info, hints) to a grouped Markdown file.",
+  "version": "0.0.1",
+  "publisher": "loremol",
+  "license": "MIT",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "problems",
+    "diagnostics",
+    "markdown",
+    "export",
+    "lint"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/loremol/export-problems-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/loremol/export-problems-extension/issues"
+  },
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "export-problems.export",
+        "title": "Export Problems to Markdown"
+      }
+    ],
+    "configuration": {
+      "title": "Export Problems to Markdown",
+      "properties": {
+        "exportProblems.minimumSeverity": {
+          "type": "string",
+          "enum": [
+            "Hint",
+            "Information",
+            "Warning",
+            "Error"
+          ],
+          "default": "Hint",
+          "description": "Minimum diagnostic severity to include in the export (Hint includes everything, Error includes only errors)."
+        },
+        "exportProblems.groupBy": {
+          "type": "string",
+          "enum": [
+            "file",
+            "severity",
+            "flat-table"
+          ],
+          "enumDescriptions": [
+            "One section per file, listing that file's diagnostics.",
+            "One section per severity (Errors, Warnings, ...), listing affected files.",
+            "A single Markdown table with one row per diagnostic."
+          ],
+          "default": "file",
+          "description": "How diagnostics are organized in the exported Markdown."
+        },
+        "exportProblems.includeSummary": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the header block (title, generation timestamp, and total problem count) at the top of the export."
+        },
+        "exportProblems.includeSource": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the source and code tag (e.g. [eslint, no-unused-vars]) for each diagnostic."
+        },
+        "exportProblems.includeColumn": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the column number in locations (Line 42:8 vs Line 42)."
+        },
+        "exportProblems.defaultFileName": {
+          "type": "string",
+          "default": "problems-export.md",
+          "description": "Default file name used in the save dialog and for the 'workspace-file' output mode."
+        },
+        "exportProblems.outputMode": {
+          "type": "string",
+          "enum": [
+            "save-dialog",
+            "workspace-file",
+            "clipboard"
+          ],
+          "enumDescriptions": [
+            "Prompt with a native save dialog each time.",
+            "Silently write to the default file name in the workspace root.",
+            "Copy the Markdown to the clipboard instead of writing a file."
+          ],
+          "default": "save-dialog",
+          "description": "Where the exported Markdown is written."
+        },
+        "exportProblems.openAfterExport": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the exported file in the editor after writing it (ignored for the 'clipboard' output mode)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}
