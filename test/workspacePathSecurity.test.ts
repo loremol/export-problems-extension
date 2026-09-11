@@ -1,0 +1,155 @@
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import test from 'node:test';
+import {
+  getSafeDialogFileName,
+  isPathStrictlyWithin,
+  resolveSafeWorkspaceTarget,
+  selectWorkspaceFileTarget,
+} from '../src/workspacePathSecurity';
+
+function isPermissionError(error: unknown): error is NodeJS.ErrnoException {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'EPERM' || error.code === 'EACCES')
+  );
+}
+
+test('resolves a new file beneath a canonical workspace root', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const canonicalRoot = await realpath(workspaceRoot);
+  const expectedTarget = path.join(canonicalRoot, 'problems.md');
+  const actual = await resolveSafeWorkspaceTarget(workspaceRoot, 'problems.md');
+
+  assert.equal(actual, expectedTarget);
+});
+
+test('fails closed when the workspace root cannot be canonicalized', async (t) => {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+
+  const missingWorkspace = path.join(tempRoot, 'missing-workspace');
+  const actual = await resolveSafeWorkspaceTarget(missingWorkspace, 'problems.md');
+
+  assert.equal(actual, undefined);
+});
+
+test('rejects a target that is a symbolic link', async (t) => {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+
+  const workspaceRoot = path.join(tempRoot, 'workspace');
+  const outsideFile = path.join(tempRoot, 'outside.md');
+  const targetPath = path.join(workspaceRoot, 'problems.md');
+  await mkdir(workspaceRoot);
+  await writeFile(outsideFile, 'do not overwrite');
+
+  try {
+    await symlink(outsideFile, targetPath, 'file');
+  } catch (error) {
+    if (isPermissionError(error)) {
+      t.skip('Creating file symlinks is not permitted on this Windows host.');
+      return;
+    }
+    throw error;
+  }
+
+  const actual = await resolveSafeWorkspaceTarget(workspaceRoot, 'problems.md');
+
+  assert.equal(actual, undefined);
+});
+
+test('rejects a target beneath a symbolic-link directory', async (t) => {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+
+  const workspaceRoot = path.join(tempRoot, 'workspace');
+  const outsideDirectory = path.join(tempRoot, 'outside');
+  const linkedDirectory = path.join(workspaceRoot, 'exports');
+  await mkdir(workspaceRoot);
+  await mkdir(outsideDirectory);
+
+  try {
+    await symlink(
+      outsideDirectory,
+      linkedDirectory,
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
+  } catch (error) {
+    if (isPermissionError(error)) {
+      t.skip('Creating directory links is not permitted on this host.');
+      return;
+    }
+    throw error;
+  }
+
+  const actual = await resolveSafeWorkspaceTarget(
+    workspaceRoot,
+    path.join('exports', 'problems.md')
+  );
+
+  assert.equal(actual, undefined);
+});
+
+test('selects automatic output only for a proven local workspace target', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const canonicalRoot = await realpath(workspaceRoot);
+  const automatic = await selectWorkspaceFileTarget('file', workspaceRoot, 'problems.md');
+  const traversal = await selectWorkspaceFileTarget('file', workspaceRoot, '../../.bashrc');
+  const remote = await selectWorkspaceFileTarget(
+    'vscode-remote',
+    '/remote/workspace',
+    'nested/problems.md'
+  );
+
+  assert.deepEqual(automatic, {
+    kind: 'automatic',
+    targetPath: path.join(canonicalRoot, 'problems.md'),
+  });
+  assert.deepEqual(traversal, { kind: 'save-dialog', fileName: '.bashrc' });
+  assert.deepEqual(remote, { kind: 'save-dialog', fileName: 'problems.md' });
+});
+
+test('derives a portable workspace-local name for fallback save dialogs', () => {
+  const cases = [
+    { configuredPath: '../../.bashrc', expected: '.bashrc' },
+    { configuredPath: '..\\..\\profile.md', expected: 'profile.md' },
+    { configuredPath: 'nested/report.md', expected: 'report.md' },
+    { configuredPath: '', expected: 'problems-export.md' },
+    { configuredPath: '../..', expected: 'problems-export.md' },
+    { configuredPath: 'CON', expected: 'problems-export.md' },
+    { configuredPath: 'report.md:stream', expected: 'problems-export.md' },
+    { configuredPath: 'report?.md', expected: 'problems-export.md' },
+    { configuredPath: 'report.md.', expected: 'problems-export.md' },
+  ];
+
+  for (const { configuredPath, expected } of cases) {
+    const actual = getSafeDialogFileName(configuredPath);
+    assert.equal(actual, expected, configuredPath || '<empty>');
+  }
+});
+
+test('recognizes only strict descendants with POSIX and Windows path semantics', () => {
+  const cases = [
+    { pathApi: path.posix, root: '/workspace', target: '/workspace/export.md', expected: true },
+    { pathApi: path.posix, root: '/workspace', target: '/workspace', expected: false },
+    { pathApi: path.posix, root: '/workspace', target: '/workspace-other/export.md', expected: false },
+    { pathApi: path.posix, root: '/workspace', target: '/outside/export.md', expected: false },
+    { pathApi: path.win32, root: 'C:\\workspace', target: 'C:\\workspace\\export.md', expected: true },
+    { pathApi: path.win32, root: 'C:\\workspace', target: 'C:\\workspace', expected: false },
+    { pathApi: path.win32, root: 'C:\\workspace', target: 'C:\\workspace-other\\export.md', expected: false },
+    { pathApi: path.win32, root: 'C:\\workspace', target: 'D:\\export.md', expected: false },
+  ];
+
+  for (const { pathApi, root, target, expected } of cases) {
+    const actual = isPathStrictlyWithin(root, target, pathApi);
+    assert.equal(actual, expected, `${target} within ${root}`);
+  }
+});

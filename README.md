@@ -1,12 +1,16 @@
 # Export Problems to Markdown
-Export everything in the VS Code / VSCodium "Problems" panel to a Markdown file, grouped by file.
+Export everything in the VS Code / VSCodium "Problems" panel to a Markdown file with customizable filtering, grouping and export options.
 
 ## Features
-- Exports all diagnostics (errors, warnings, info, hints) across the whole workspace, not just open files.
+- Exports all diagnostics (errors, warnings, info, hints) across the whole workspace.
 - Each entry shows line:column, severity, source, code, and message.
 - Configurable layout: group by file, group by severity, or a single flat table.
-- Configurable output: save dialog, silent write to the workspace root, or copy to the clipboard.
+- Configurable output:
+    1. specify the output every time with save dialog
+    2. automatic file write in the workspace
+    3. copy to the clipboard
 - Filter by minimum severity, and toggle the header block, source/code tags, and column numbers.
+- Insecure paths submitted by the user are rejected and prompt a new save dialog
 
 See [Settings](#settings) for all options.
 
@@ -14,7 +18,7 @@ See [Settings](#settings) for all options.
 1. Open the Command Palette
 2. Run **Export Problems to Markdown**.
 
-Example output:
+Example output produced:
 
 ```markdown
 # Problems Export
@@ -34,12 +38,11 @@ Total problems: 2 across 1 file(s)
 | `exportProblems.includeSummary` | boolean | `true` | Include the title, timestamp, and total-count header block. |
 | `exportProblems.includeSource` | boolean | `true` | Include the `[eslint, no-unused-vars]` source/code tag. |
 | `exportProblems.includeColumn` | boolean | `true` | Include the column number (`Line 42:8` vs `Line 42`). |
-| `exportProblems.defaultFileName` | string | `problems-export.md` | File name pre-filled in the save dialog / used for `workspace-file` mode. |
-| `exportProblems.outputMode` | `save-dialog` \| `workspace-file` \| `clipboard` | `save-dialog` | Where output goes: native dialog, silent write to the workspace root, or the clipboard. |
+| `exportProblems.defaultFileName` | string | `problems-export.md` | File name or relative path pre-filled in the save dialog / used for `workspace-file` mode. |
+| `exportProblems.outputMode` | `save-dialog` \| `workspace-file` \| `clipboard` | `save-dialog` | Where output goes: native dialog, validated automatic write to a strict descendant of a local workspace, or the clipboard. Other `workspace-file` targets require save-dialog confirmation. |
 | `exportProblems.openAfterExport` | boolean | `true` | Open the exported file after writing (ignored for `clipboard`). |
 
 ### Grouping (`groupBy`)
-
 - `file`: one `## <path>` section per file (default, shown above).
 - `severity`: one section per severity (`## Errors`, `## Warnings`, ...), with the file path in each entry.
 - `flat-table`: a single Markdown table, one row per diagnostic:
@@ -48,3 +51,11 @@ Total problems: 2 across 1 file(s)
 | --- | --- | --- | --- | --- |
 | Error | src/index.ts | 12:5 | ts, 2322 | Type 'string' is not assignable to type 'number'. |
 ```
+
+## Development
+| Command | Description |
+| --- | --- |
+| `npm ci` | Install the locked development dependencies. |
+| `npm run compile` | Compile the extension into `out/`. |
+| `npm test` | Compile and run the extension and security regression tests. |
+| `npm run package` | Build the VS Code extension package. |

@@ -2,7 +2,7 @@
   "name": "export-problems-to-markdown",
   "displayName": "Export Problems to Markdown",
   "description": "Export all diagnostics from the Problems panel (errors, warnings, info, hints) to a grouped Markdown file.",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "publisher": "loremol",
   "license": "MIT",
   "icon": "icon.png",
@@ -14,11 +14,11 @@
   ],
   "keywords": [
     "problems",
+    "problem",
     "diagnostics",
     "markdown",
-    "export",
-    "lint"
-  ],
+    "export"
+    ],
   "repository": {
     "type": "git",
     "url": "https://github.com/loremol/export-problems-extension.git"
@@ -92,11 +92,11 @@
           ],
           "enumDescriptions": [
             "Prompt with a native save dialog each time.",
-            "Silently write to the default file name in the workspace root.",
+            "Silently write to a validated file beneath the local workspace; otherwise prompt with a save dialog.",
             "Copy the Markdown to the clipboard instead of writing a file."
           ],
           "default": "save-dialog",
-          "description": "Where the exported Markdown is written."
+          "description": "Where the exported Markdown is written. Workspace-file mode prompts for confirmation when the configured target cannot be proven safe."
         },
         "exportProblems.openAfterExport": {
           "type": "boolean",
@@ -109,6 +109,8 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "compile:test": "tsc -p ./test/tsconfig.json",
+    "test": "npm run compile && npm run compile:test && node --test .test-out/test/extension.test.js .test-out/test/workspacePathSecurity.test.js",
     "watch": "tsc -watch -p ./",
     "package": "npx @vscode/vsce package"
   },

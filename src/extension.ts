@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
+import { selectWorkspaceFileTarget } from './workspacePathSecurity';
 
-export function activate(context: vscode.ExtensionContext): void {
+export function activate(
+  context: Pick<vscode.ExtensionContext, 'subscriptions'>
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('export-problems.export', exportProblemsToMarkdown)
   );
@@ -103,7 +106,23 @@ async function exportProblemsToMarkdown(): Promise<void> {
       );
       return;
     }
-    targetUri = vscode.Uri.joinPath(workspaceFolder.uri, options.defaultFileName);
+    const target = await selectWorkspaceFileTarget(
+      workspaceFolder.uri.scheme,
+      workspaceFolder.uri.fsPath,
+      options.defaultFileName
+    );
+    if (target.kind === 'automatic') {
+      targetUri = vscode.Uri.file(target.targetPath);
+    } else {
+      targetUri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.joinPath(workspaceFolder.uri, target.fileName),
+        filters: { Markdown: ['md'] },
+        saveLabel: 'Export Problems',
+      });
+      if (!targetUri) {
+        return;
+      }
+    }
   } else {
     const defaultUri = workspaceFolder
       ? vscode.Uri.joinPath(workspaceFolder.uri, options.defaultFileName)
@@ -171,12 +190,13 @@ function buildByFile(
 ): string[] {
   const lines: string[] = [];
   for (const [uri, diagnostics] of entries) {
-    lines.push(`## ${vscode.workspace.asRelativePath(uri, includeFolderName)}`, '');
+    const path = formatInlineText(vscode.workspace.asRelativePath(uri, includeFolderName));
+    lines.push(`## ${path}`, '');
     for (const diagnostic of diagnostics) {
       const loc = formatLocation(diagnostic, options.includeColumn);
       const label = severityLabels[diagnostic.severity];
       const tag = formatSourceTag(diagnostic, options.includeSource);
-      lines.push(`- **Line ${loc}** ${label}${tag}: ${flattenMessage(diagnostic.message)}`);
+      lines.push(`- **Line ${loc}** ${label}${tag}: ${formatInlineText(diagnostic.message)}`);
     }
     lines.push('');
   }
@@ -212,7 +232,9 @@ function buildBySeverity(
     for (const { path, diagnostic } of items) {
       const loc = formatLocation(diagnostic, options.includeColumn);
       const tag = formatSourceTag(diagnostic, options.includeSource);
-      lines.push(`- **${path}:${loc}**${tag}: ${flattenMessage(diagnostic.message)}`);
+      lines.push(
+        `- **${formatInlineText(path)}:${loc}**${tag}: ${formatInlineText(diagnostic.message)}`
+      );
     }
     lines.push('');
   }
@@ -236,7 +258,7 @@ function buildFlatTable(
   ];
 
   for (const [uri, diagnostics] of entries) {
-    const path = escapeCell(vscode.workspace.asRelativePath(uri, includeFolderName));
+    const path = formatTableCell(vscode.workspace.asRelativePath(uri, includeFolderName));
     for (const diagnostic of diagnostics) {
       const cells = [
         severityLabels[diagnostic.severity],
@@ -244,9 +266,9 @@ function buildFlatTable(
         formatLocation(diagnostic, options.includeColumn),
       ];
       if (options.includeSource) {
-        cells.push(escapeCell(formatSourceAndCode(diagnostic)));
+        cells.push(formatSourceAndCode(diagnostic, formatTableCell));
       }
-      cells.push(escapeCell(flattenMessage(diagnostic.message)));
+      cells.push(formatTableCell(diagnostic.message));
       lines.push(`| ${cells.join(' | ')} |`);
     }
   }
@@ -263,25 +285,35 @@ function formatLocation(diagnostic: vscode.Diagnostic, includeColumn: boolean): 
   return `${line}:${column}`;
 }
 
-function formatSourceAndCode(diagnostic: vscode.Diagnostic): string {
+function formatSourceAndCode(
+  diagnostic: vscode.Diagnostic,
+  escapeText: (value: string) => string
+): string {
+  const parts: string[] = [];
+  if (diagnostic.source) {
+    parts.push(escapeText(diagnostic.source));
+  }
   const code = formatCode(diagnostic.code);
-  return [diagnostic.source, code].filter(Boolean).join(', ');
+  if (code) {
+    parts.push(escapeText(code));
+  }
+  return parts.join(', ');
 }
 
 function formatSourceTag(diagnostic: vscode.Diagnostic, includeSource: boolean): string {
   if (!includeSource) {
     return '';
   }
-  const sourceAndCode = formatSourceAndCode(diagnostic);
+  const sourceAndCode = formatSourceAndCode(diagnostic, formatInlineText);
   return sourceAndCode ? ` [${sourceAndCode}]` : '';
 }
 
-function flattenMessage(message: string): string {
-  return message.replace(/\r?\n/g, ' ');
+function formatInlineText(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ');
 }
 
-function escapeCell(value: string): string {
-  return value.replace(/\|/g, '\\|');
+function formatTableCell(value: string): string {
+  return formatInlineText(value).replace(/\|/g, '\\|');
 }
 
 function formatCode(code: vscode.Diagnostic['code']): string {
