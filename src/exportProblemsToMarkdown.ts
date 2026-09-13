@@ -103,64 +103,81 @@ export async function exportProblemsToMarkdown(): Promise<void> {
   }
 
   const content = buildMarkdown(entries, includeFolderName, options);
+  await deliverMarkdown(content, options);
+}
 
+async function deliverMarkdown(content: string, options: ExportOptions): Promise<void> {
   if (options.outputMode === 'clipboard') {
     await vscode.env.clipboard.writeText(content);
     vscode.window.showInformationMessage('Problems exported to clipboard.');
     return;
   }
 
+  const targetUri = await selectOutputUri(options);
+  if (!targetUri) {
+    return;
+  }
+
+  await writeMarkdownFile(targetUri, content, options.openAfterExport);
+}
+
+async function selectOutputUri(options: ExportOptions): Promise<vscode.Uri | undefined> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  let targetUri: vscode.Uri | undefined;
 
   if (options.outputMode === 'workspace-file') {
     if (!workspaceFolder) {
       vscode.window.showErrorMessage(
         "Cannot use the 'workspace-file' output mode: no workspace folder is open."
       );
-      return;
+      return undefined;
     }
+
     const target = await selectWorkspaceFileTarget(
       workspaceFolder.uri.scheme,
       workspaceFolder.uri.fsPath,
       options.defaultFileName
     );
     if (target.kind === 'automatic') {
-      targetUri = vscode.Uri.file(target.targetPath);
-    } else {
-      targetUri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.joinPath(workspaceFolder.uri, target.fileName),
-        filters: { Markdown: ['md'] },
-        saveLabel: 'Export Problems',
-      });
-      if (!targetUri) {
-        return;
-      }
+      return vscode.Uri.file(target.targetPath);
     }
-  } else {
-    const defaultUri = workspaceFolder
-      ? vscode.Uri.joinPath(workspaceFolder.uri, options.defaultFileName)
-      : undefined;
-    targetUri = await vscode.window.showSaveDialog({
-      defaultUri,
-      filters: { Markdown: ['md'] },
-      saveLabel: 'Export Problems',
-    });
-    if (!targetUri) {
-      return;
-    }
-  }
 
-  await vscode.workspace.fs.writeFile(targetUri, Buffer.from(content, 'utf8'));
-
-  if (options.openAfterExport) {
-    const doc = await vscode.workspace.openTextDocument(targetUri);
-    await vscode.window.showTextDocument(doc);
-  } else {
-    vscode.window.showInformationMessage(
-      `Problems exported to ${vscode.workspace.asRelativePath(targetUri)}.`
+    return showMarkdownSaveDialog(
+      vscode.Uri.joinPath(workspaceFolder.uri, target.fileName)
     );
   }
+
+  const defaultUri = workspaceFolder
+    ? vscode.Uri.joinPath(workspaceFolder.uri, options.defaultFileName)
+    : undefined;
+  return showMarkdownSaveDialog(defaultUri);
+}
+
+function showMarkdownSaveDialog(
+  defaultUri?: vscode.Uri
+): Thenable<vscode.Uri | undefined> {
+  return vscode.window.showSaveDialog({
+    defaultUri,
+    filters: { Markdown: ['md'] },
+    saveLabel: 'Export Problems',
+  });
+}
+
+async function writeMarkdownFile(
+  targetUri: vscode.Uri,
+  content: string,
+  openAfterExport: boolean
+): Promise<void> {
+  await vscode.workspace.fs.writeFile(targetUri, Buffer.from(content, 'utf8'));
+
+  if (openAfterExport) {
+    const document = await vscode.workspace.openTextDocument(targetUri);
+    await vscode.window.showTextDocument(document);
+    return;
+  }
+
+  vscode.window.showInformationMessage(
+    `Problems exported to ${vscode.workspace.asRelativePath(targetUri)}.`
+  );
 }
 
 function buildMarkdown(
