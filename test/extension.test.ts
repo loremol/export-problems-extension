@@ -266,12 +266,12 @@ const headingHierarchyCases: ReadonlyArray<{
   {
     name: 'file grouping with a summary',
     configuration: { groupBy: 'file', includeSummary: true },
-    expectedHeadings: ['# Problems Export', '## source.ts'],
+    expectedHeadings: ['# Problems', '## source.ts'],
   },
   {
     name: 'severity grouping with a summary',
     configuration: { groupBy: 'severity', includeSummary: true },
-    expectedHeadings: ['# Problems Export', '## Errors'],
+    expectedHeadings: ['# Problems', '## Errors'],
   },
 ];
 

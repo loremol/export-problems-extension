@@ -159,7 +159,7 @@ function buildMarkdown(
   if (options.includeSummary) {
     const totalCount = entries.reduce((sum, [, diagnostics]) => sum + diagnostics.length, 0);
     lines.push(
-      '# Problems Export',
+      '# Problems',
       '',
       `Generated: ${new Date().toISOString()}`,
       `Total problems: ${totalCount} across ${entries.length} file(s)`,
