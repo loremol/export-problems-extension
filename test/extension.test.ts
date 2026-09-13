@@ -85,6 +85,7 @@ class TestConfiguration implements vscode.WorkspaceConfiguration {
 type HostOverrides = {
   configuration?: Partial<ExportConfiguration>;
   diagnostics?: vscode.Diagnostic[];
+  diagnosticEntries?: [vscode.Uri, vscode.Diagnostic[]][];
   relativePath?: string;
 };
 
@@ -94,6 +95,10 @@ type TestHost = {
   vscode: VscodeApi;
   writes: Write[];
   saveDialogs: vscode.SaveDialogOptions[];
+  errorMessages: string[];
+  informationMessages: string[];
+  openedDocuments: vscode.Uri[];
+  shownDocuments: vscode.Uri[];
   getRegisteredCommand(): () => unknown;
   getClipboardText(): string | undefined;
 };
@@ -105,11 +110,19 @@ function createVscode(
 ): TestHost {
   const writes: Write[] = [];
   const saveDialogs: vscode.SaveDialogOptions[] = [];
+  const errorMessages: string[] = [];
+  const informationMessages: string[] = [];
+  const openedDocuments: vscode.Uri[] = [];
+  const shownDocuments: vscode.Uri[] = [];
   const diagnostics: vscode.Diagnostic[] = overrides.diagnostics ?? [{
     severity: 0,
     range: createRange(),
     message: 'Example problem',
   }];
+  const diagnosticEntries: [vscode.Uri, vscode.Diagnostic[]][] =
+    overrides.diagnosticEntries ?? [
+      [TestUri.file(path.join(workspaceRoot, 'source.ts')), diagnostics],
+    ];
   const configuration: Partial<ExportConfiguration> = overrides.configuration ?? {};
   let clipboardText: string | undefined;
   let registeredCommand: (() => unknown) | undefined;
@@ -137,7 +150,7 @@ function createVscode(
     },
     languages: {
       getDiagnostics() {
-        return [[TestUri.file(path.join(workspaceRoot, 'source.ts')), diagnostics]];
+        return diagnosticEntries;
       },
     },
     window: {
@@ -145,14 +158,17 @@ function createVscode(
         saveDialogs.push(options ?? {});
         return undefined;
       },
-      async showErrorMessage() {
+      async showErrorMessage(message) {
+        errorMessages.push(message);
         return undefined;
       },
-      async showInformationMessage() {
+      async showInformationMessage(message) {
+        informationMessages.push(message);
         return undefined;
       },
-      async showTextDocument(): Promise<vscode.TextEditor> {
-        throw new Error('showTextDocument was not expected in this test');
+      async showTextDocument(document): Promise<vscode.TextEditor> {
+        shownDocuments.push(document.uri);
+        return { document } as vscode.TextEditor;
       },
     },
     workspace: {
@@ -183,8 +199,9 @@ function createVscode(
           writes.push({ uri, content });
         },
       },
-      async openTextDocument(): Promise<vscode.TextDocument> {
-        throw new Error('openTextDocument was not expected in this test');
+      async openTextDocument(uri): Promise<vscode.TextDocument> {
+        openedDocuments.push(uri);
+        return { uri } as vscode.TextDocument;
       },
     },
   };
@@ -193,6 +210,10 @@ function createVscode(
     vscode: vscodeApi,
     writes,
     saveDialogs,
+    errorMessages,
+    informationMessages,
+    openedDocuments,
+    shownDocuments,
     getRegisteredCommand() {
       assert.ok(registeredCommand, 'extension command was not registered');
       return registeredCommand;
@@ -253,6 +274,91 @@ test('includes workspace folder names in paths when multiple folders are open', 
 
   assert.ok(
     host.getClipboardText()?.includes('## export-problems-multiple-workspaces/source.ts')
+  );
+});
+
+test('reports when no diagnostics meet the configured severity threshold', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-no-matches');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'Error',
+      outputMode: 'clipboard',
+    },
+    diagnostics: [{
+      severity: 1,
+      range: createRange(),
+      message: 'Filtered warning',
+    }],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.informationMessages, ['No problems found in workspace.']);
+  assert.equal(host.getClipboardText(), undefined);
+  assert.equal(host.writes.length, 0);
+  assert.equal(host.saveDialogs.length, 0);
+});
+
+test('filters diagnostics by severity and sorts files and positions', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-sorted');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'Warning',
+      includeSummary: false,
+      includeSource: false,
+      outputMode: 'clipboard',
+    },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'z.ts')), [{
+        severity: 1,
+        range: createRange(0, 0),
+        message: 'Z file warning',
+      }]],
+      [TestUri.file(path.join(workspaceRoot, 'a.ts')), [
+        {
+          severity: 1,
+          range: createRange(4, 3),
+          message: 'Later warning',
+        },
+        {
+          severity: 0,
+          range: createRange(1, 7),
+          message: 'Later-column error',
+        },
+        {
+          severity: 3,
+          range: createRange(0, 0),
+          message: 'Filtered hint',
+        },
+        {
+          severity: 1,
+          range: createRange(1, 1),
+          message: 'Earlier-column warning',
+        },
+      ]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    [
+      '# a.ts',
+      '',
+      '- **Line 2:2** Warning: Earlier-column warning',
+      '- **Line 2:8** Error: Later-column error',
+      '- **Line 5:4** Warning: Later warning',
+      '',
+      '# z.ts',
+      '',
+      '- **Line 1:1** Warning: Z file warning',
+      '',
+    ].join('\n')
   );
 });
 
@@ -397,6 +503,74 @@ for (const { name, configuration, expectedHeadings } of headingHierarchyCases) {
     assert.deepEqual(headings, expectedHeadings);
   });
 }
+
+test('stops without writing when the save dialog is cancelled', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-cancelled-dialog');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { outputMode: 'save-dialog' },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.saveDialogs.length, 1);
+  assert.equal(host.writes.length, 0);
+  assert.equal(host.openedDocuments.length, 0);
+});
+
+test('reports an error when workspace-file mode has no open workspace', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-no-workspace');
+  const host = createVscode(workspaceRoot, 'problems.md');
+  host.vscode.workspace.workspaceFolders = undefined;
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.errorMessages, [
+    "Cannot use the 'workspace-file' output mode: no workspace folder is open.",
+  ]);
+  assert.equal(host.saveDialogs.length, 0);
+  assert.equal(host.writes.length, 0);
+});
+
+test('writes a validated workspace-file target without prompting', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-write-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const host = createVscode(workspaceRoot, path.join('reports', 'problems.md'));
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.saveDialogs.length, 0);
+  assert.equal(host.writes.length, 1);
+  assert.equal(
+    host.writes[0].uri.fsPath,
+    path.join(workspaceRoot, 'reports', 'problems.md')
+  );
+  assert.match(Buffer.from(host.writes[0].content).toString('utf8'), /Example problem/);
+});
+
+test('opens the exported workspace file when configured', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-open-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { openAfterExport: true },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const expectedPath = path.join(workspaceRoot, 'problems.md');
+  assert.deepEqual(host.openedDocuments.map((uri) => uri.fsPath), [expectedPath]);
+  assert.deepEqual(host.shownDocuments.map((uri) => uri.fsPath), [expectedPath]);
+  assert.equal(host.informationMessages.length, 0);
+});
 
 test('requires save confirmation instead of writing an escaping workspace target', async (t) => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
