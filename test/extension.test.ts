@@ -227,6 +227,27 @@ function activateExtension(extension: ExtensionModule): void {
   extension.activate({ subscriptions: [] });
 }
 
+test('omits the summary when includeSummary is not configured', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-default-summary');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { outputMode: 'clipboard' },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    [
+      '## source.ts',
+      '',
+      '- **Line 1:1** Error: Example problem',
+      '',
+    ].join('\n')
+  );
+});
+
 test('requires save confirmation instead of writing an escaping workspace target', async (t) => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
   t.after(() => rm(workspaceRoot, { recursive: true, force: true }));

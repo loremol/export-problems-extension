@@ -56,7 +56,7 @@ function readOptions(): ExportOptions {
   return {
     threshold: severityThresholds[minimumSeverityName] ?? vscode.DiagnosticSeverity.Hint,
     groupBy: config.get<ExportOptions['groupBy']>('groupBy', 'file'),
-    includeSummary: config.get<boolean>('includeSummary', true),
+    includeSummary: config.get<boolean>('includeSummary', false),
     includeSource: config.get<boolean>('includeSource', true),
     includeColumn: config.get<boolean>('includeColumn', true),
     defaultFileName: config.get<string>('defaultFileName', 'problems-export.md'),

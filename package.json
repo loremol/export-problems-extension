@@ -65,7 +65,7 @@
         },
         "exportProblems.includeSummary": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Include the header block (title, generation timestamp, and total problem count) at the top of the export."
         },
         "exportProblems.includeSource": {

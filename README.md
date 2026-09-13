@@ -21,10 +21,6 @@ See [Settings](#settings) for all options.
 Example output produced:
 
 ```markdown
-# Problems Export
-Generated: 2026-07-12T10:00:00.000Z
-Total problems: 2 across 1 file(s)
-
 ## src/index.ts
 - **Line 12:5** Error [ts, 2322]: Type 'string' is not assignable to type 'number'.
 - **Line 30:1** Warning [eslint, no-unused-vars]: 'foo' is declared but never used.
@@ -35,7 +31,7 @@ Total problems: 2 across 1 file(s)
 | --- | --- | --- | --- |
 | `exportProblems.minimumSeverity` | `Hint` \| `Information` \| `Warning` \| `Error` | `Hint` | Minimum severity to include (`Hint` includes everything, `Error` includes only errors). |
 | `exportProblems.groupBy` | `file` \| `severity` \| `flat-table` | `file` | How diagnostics are organized (see below). |
-| `exportProblems.includeSummary` | boolean | `true` | Include the title, timestamp, and total-count header block. |
+| `exportProblems.includeSummary` | boolean | `false` | Include the title, timestamp, and total-count header block. |
 | `exportProblems.includeSource` | boolean | `true` | Include the `[eslint, no-unused-vars]` source/code tag. |
 | `exportProblems.includeColumn` | boolean | `true` | Include the column number (`Line 42:8` vs `Line 42`). |
 | `exportProblems.defaultFileName` | string | `problems-export.md` | File name or relative path pre-filled in the save dialog / used for `workspace-file` mode. |
