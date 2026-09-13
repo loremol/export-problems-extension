@@ -169,11 +169,14 @@ function createVscode(
           ...configuration,
         });
       },
-      asRelativePath(uri) {
+      asRelativePath(uri, includeWorkspaceFolder = false) {
         if (typeof uri === 'string') {
           return uri;
         }
-        return overrides.relativePath ?? path.relative(workspaceRoot, uri.fsPath);
+        const relativePath = overrides.relativePath ?? path.relative(workspaceRoot, uri.fsPath);
+        return includeWorkspaceFolder
+          ? path.join(path.basename(workspaceRoot), relativePath)
+          : relativePath;
       },
       fs: {
         async writeFile(uri, content) {
@@ -230,16 +233,27 @@ function activateExtension(extension: ExtensionModule): void {
   extension.activate({ subscriptions: [] });
 }
 
-test('detects when multiple workspace folders are open', () => {
+test('includes workspace folder names in paths when multiple folders are open', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-multiple-workspaces');
-  const host = createVscode(workspaceRoot, 'problems.md');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { outputMode: 'clipboard' },
+  });
   host.vscode.workspace.workspaceFolders = [
     ...host.vscode.workspace.workspaceFolders!,
-    ...host.vscode.workspace.workspaceFolders!,
+    {
+      uri: TestUri.file(path.join(tmpdir(), 'second-workspace')),
+      name: 'second-workspace',
+      index: 1,
+    },
   ];
   const extension = loadExtension(host.vscode);
+  activateExtension(extension);
 
-  assert.equal(extension.hasMultipleWorkspaceFolders(), true);
+  await host.getRegisteredCommand()();
+
+  assert.ok(
+    host.getClipboardText()?.includes('## export-problems-multiple-workspaces/source.ts')
+  );
 });
 
 test('includes only the summary title by default', async () => {
