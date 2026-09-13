@@ -231,7 +231,9 @@ type CommonJsLoader = {
 
 function loadExtension(vscodeApi: VscodeApi): ExtensionModule {
   const extensionPath = require.resolve('../src/extension');
+  const exportCommandPath = require.resolve('../src/exportProblemsToMarkdown');
   delete require.cache[extensionPath];
+  delete require.cache[exportCommandPath];
 
   // Node does not publish _load, so the assertion is isolated to this interception boundary.
   const commonJsLoader = Module as unknown as CommonJsLoader;
