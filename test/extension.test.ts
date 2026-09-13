@@ -274,9 +274,8 @@ test('includes workspace folder names in paths when multiple folders are open', 
 
   await host.getRegisteredCommand()();
 
-  assert.ok(
-    host.getClipboardText()?.includes('## export-problems-multiple-workspaces/source.ts')
-  );
+  const expectedPath = path.join('export-problems-multiple-workspaces', 'source.ts');
+  assert.ok(host.getClipboardText()?.includes(`## ${expectedPath}`));
 });
 
 test('reports when no diagnostics meet the configured severity threshold', async () => {
