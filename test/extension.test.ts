@@ -11,6 +11,9 @@ type ExportConfiguration = {
   minimumSeverity: 'Hint' | 'Information' | 'Warning' | 'Error';
   groupBy: 'file' | 'severity' | 'flat-table';
   includeSummary: boolean;
+  summaryTitle: string;
+  includeExportDate: boolean;
+  includeProblemCount: boolean;
   includeSource: boolean;
   includeColumn: boolean;
   defaultFileName: string;
@@ -227,7 +230,7 @@ function activateExtension(extension: ExtensionModule): void {
   extension.activate({ subscriptions: [] });
 }
 
-test('omits the summary and uses the file name as H1 when includeSummary is not configured', async () => {
+test('includes only the summary title by default', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-default-summary');
   const host = createVscode(workspaceRoot, 'problems.md', {
     configuration: { outputMode: 'clipboard' },
@@ -240,12 +243,88 @@ test('omits the summary and uses the file name as H1 when includeSummary is not 
   assert.equal(
     host.getClipboardText(),
     [
-      '# source.ts',
+      '# Problems',
+      '',
+      '## source.ts',
       '',
       '- **Line 1:1** Error: Example problem',
       '',
     ].join('\n')
   );
+});
+
+test('uses the configured summary title', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-summary-title');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      includeSummary: true,
+      summaryTitle: 'Code Quality Report',
+      outputMode: 'clipboard',
+    },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.getClipboardText()?.split('\n')[0], '# Code Quality Report');
+});
+
+test('keeps the configured summary title on one heading line', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-summary-title-line-break');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      includeSummary: true,
+      summaryTitle: 'Code\nQuality Report',
+      outputMode: 'clipboard',
+    },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.getClipboardText()?.split('\n')[0], '# Code Quality Report');
+});
+
+test('omits only the export date when includeExportDate is false', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-no-export-date');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      includeSummary: true,
+      includeExportDate: false,
+      includeProblemCount: true,
+      outputMode: 'clipboard',
+    },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const content = host.getClipboardText();
+  assert.ok(!content?.includes('Generated:'));
+  assert.ok(content?.includes('Total problems: 1 across 1 file(s)'));
+});
+
+test('omits only the problem count when includeProblemCount is false', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-no-problem-count');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      includeSummary: true,
+      includeExportDate: true,
+      includeProblemCount: false,
+      outputMode: 'clipboard',
+    },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const content = host.getClipboardText();
+  assert.ok(content?.includes('Generated:'));
+  assert.ok(!content?.includes('Total problems:'));
 });
 
 const headingHierarchyCases: ReadonlyArray<{

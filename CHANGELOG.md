@@ -4,9 +4,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add settings to customize the summary title and independently toggle its export date and problem count.
+
 ### Changed
 
-- Disable the summary header by default; it remains available through `exportProblems.includeSummary`.
+- Include the summary title by default while omitting its export date and problem count.
 - Promote file and severity group headings to H1 when the summary is omitted, while retaining H2 beneath an included summary.
 
 ## [1.0.0] - 2026-09-11

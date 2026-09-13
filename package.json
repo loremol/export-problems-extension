@@ -65,8 +65,23 @@
         },
         "exportProblems.includeSummary": {
           "type": "boolean",
+          "default": true,
+          "description": "Include the summary header block at the top of the export."
+        },
+        "exportProblems.summaryTitle": {
+          "type": "string",
+          "default": "Problems",
+          "description": "H1 title used when the summary is included."
+        },
+        "exportProblems.includeExportDate": {
+          "type": "boolean",
           "default": false,
-          "description": "Include the header block (title, generation timestamp, and total problem count) at the top of the export."
+          "description": "Include the generation timestamp in the summary."
+        },
+        "exportProblems.includeProblemCount": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include the total problem and file count in the summary."
         },
         "exportProblems.includeSource": {
           "type": "boolean",

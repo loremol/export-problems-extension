@@ -43,6 +43,9 @@ interface ExportOptions {
   threshold: vscode.DiagnosticSeverity;
   groupBy: 'file' | 'severity' | 'flat-table';
   includeSummary: boolean;
+  summaryTitle: string;
+  includeExportDate: boolean;
+  includeProblemCount: boolean;
   includeSource: boolean;
   includeColumn: boolean;
   defaultFileName: string;
@@ -56,7 +59,10 @@ function readOptions(): ExportOptions {
   return {
     threshold: severityThresholds[minimumSeverityName] ?? vscode.DiagnosticSeverity.Hint,
     groupBy: config.get<ExportOptions['groupBy']>('groupBy', 'file'),
-    includeSummary: config.get<boolean>('includeSummary', false),
+    includeSummary: config.get<boolean>('includeSummary', true),
+    summaryTitle: config.get<string>('summaryTitle', 'Problems'),
+    includeExportDate: config.get<boolean>('includeExportDate', false),
+    includeProblemCount: config.get<boolean>('includeProblemCount', false),
     includeSource: config.get<boolean>('includeSource', true),
     includeColumn: config.get<boolean>('includeColumn', true),
     defaultFileName: config.get<string>('defaultFileName', 'problems-export.md'),
@@ -157,14 +163,17 @@ function buildMarkdown(
   const lines: string[] = [];
 
   if (options.includeSummary) {
-    const totalCount = entries.reduce((sum, [, diagnostics]) => sum + diagnostics.length, 0);
-    lines.push(
-      '# Problems',
-      '',
-      `Generated: ${new Date().toISOString()}`,
-      `Total problems: ${totalCount} across ${entries.length} file(s)`,
-      ''
-    );
+    lines.push(`# ${formatInlineText(options.summaryTitle)}`, '');
+    if (options.includeExportDate) {
+      lines.push(`Generated: ${new Date().toISOString()}`);
+    }
+    if (options.includeProblemCount) {
+      const totalCount = entries.reduce((sum, [, diagnostics]) => sum + diagnostics.length, 0);
+      lines.push(`Total problems: ${totalCount} across ${entries.length} file(s)`);
+    }
+    if (options.includeExportDate || options.includeProblemCount) {
+      lines.push('');
+    }
   }
 
   switch (options.groupBy) {

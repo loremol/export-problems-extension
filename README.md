@@ -31,7 +31,10 @@ Example output produced:
 | --- | --- | --- | --- |
 | `exportProblems.minimumSeverity` | `Hint` \| `Information` \| `Warning` \| `Error` | `Hint` | Minimum severity to include (`Hint` includes everything, `Error` includes only errors). |
 | `exportProblems.groupBy` | `file` \| `severity` \| `flat-table` | `file` | How diagnostics are organized (see below). |
-| `exportProblems.includeSummary` | boolean | `false` | Include the title, timestamp, and total-count header block. |
+| `exportProblems.includeSummary` | boolean | `true` | Include the summary header block. |
+| `exportProblems.summaryTitle` | string | `Problems` | H1 title used when the summary is included. |
+| `exportProblems.includeExportDate` | boolean | `false` | Include the generation timestamp in the summary. |
+| `exportProblems.includeProblemCount` | boolean | `false` | Include the total problem and file count in the summary. |
 | `exportProblems.includeSource` | boolean | `true` | Include the `[eslint, no-unused-vars]` source/code tag. |
 | `exportProblems.includeColumn` | boolean | `true` | Include the column number (`Line 42:8` vs `Line 42`). |
 | `exportProblems.defaultFileName` | string | `problems-export.md` | File name or relative path pre-filled in the save dialog / used for `workspace-file` mode. |
@@ -39,8 +42,8 @@ Example output produced:
 | `exportProblems.openAfterExport` | boolean | `true` | Open the exported file after writing (ignored for `clipboard`). |
 
 ### Grouping (`groupBy`)
-- `file`: one heading per file (`# <path>` by default, or `## <path>` beneath an included summary).
-- `severity`: one heading per severity (`# Errors` by default, or `## Errors` beneath an included summary), with the file path in each entry.
+- `file`: one heading per file (`## <path>` by default beneath the summary, or `# <path>` when it is disabled).
+- `severity`: one heading per severity (`## Errors` by default beneath the summary, or `# Errors` when it is disabled), with the file path in each entry.
 - `flat-table`: a single Markdown table, one row per diagnostic:
 ```markdown
 | Severity | File | Line | Source | Message |
