@@ -77,7 +77,6 @@ function collectDiagnosticEntries(
       uri,
       diagnostics
         .filter((diagnostic) => diagnostic.severity <= threshold)
-        .slice()
         .sort(
           (left, right) =>
             left.range.start.line - right.range.start.line ||
