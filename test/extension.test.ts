@@ -230,6 +230,18 @@ function activateExtension(extension: ExtensionModule): void {
   extension.activate({ subscriptions: [] });
 }
 
+test('detects when multiple workspace folders are open', () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-multiple-workspaces');
+  const host = createVscode(workspaceRoot, 'problems.md');
+  host.vscode.workspace.workspaceFolders = [
+    ...host.vscode.workspace.workspaceFolders!,
+    ...host.vscode.workspace.workspaceFolders!,
+  ];
+  const extension = loadExtension(host.vscode);
+
+  assert.equal(extension.hasMultipleWorkspaceFolders(), true);
+});
+
 test('includes only the summary title by default', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-default-summary');
   const host = createVscode(workspaceRoot, 'problems.md', {

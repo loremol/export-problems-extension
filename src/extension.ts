@@ -70,10 +70,25 @@ function readOptions(): ExportOptions {
     openAfterExport: config.get<boolean>('openAfterExport', true),
   };
 }
+  
+// True if there is more than one workspace open in the same window
+export function hasMultipleWorkspaceFolders(): boolean {
+  // No workspace has been opened
+  if (vscode.workspace.workspaceFolders == undefined) {
+    return false;
+  }
+  
+  if (vscode.workspace.workspaceFolders.length > 1) {
+    return true;
+  } else {
+    return false;
+  }
+}
 
 async function exportProblemsToMarkdown(): Promise<void> {
   const options = readOptions();
-  const includeFolderName = (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
+
+  const includeFolderName = hasMultipleWorkspaceFolders();
 
   const entries: [vscode.Uri, vscode.Diagnostic[]][] = vscode.languages
     .getDiagnostics()
