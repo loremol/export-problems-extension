@@ -2,7 +2,7 @@
   "name": "export-problems-to-markdown",
   "displayName": "Export Problems to Markdown",
   "description": "Export all diagnostics from the Problems panel (errors, warnings, info, hints) to a grouped Markdown file.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "loremol",
   "license": "MIT",
   "icon": "icon.png",
