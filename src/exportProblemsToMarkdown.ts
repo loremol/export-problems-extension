@@ -29,6 +29,8 @@ const severityThresholds: Record<string, vscode.DiagnosticSeverity> = {
   Hint: vscode.DiagnosticSeverity.Hint,
 };
 
+type DiagnosticEntry = [vscode.Uri, vscode.Diagnostic[]];
+
 interface ExportOptions {
   threshold: vscode.DiagnosticSeverity;
   groupBy: 'file' | 'severity' | 'flat-table';
@@ -61,38 +63,39 @@ function readOptions(): ExportOptions {
   };
 }
 
-// True if there is more than one workspace open in the same window
-function hasMultipleWorkspaceFolders(): boolean {
-  // No workspace has been opened
-  if (vscode.workspace.workspaceFolders == undefined) {
-    return false;
-  }
+function shouldIncludeWorkspaceFolderName(): boolean {
+  return (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
+}
 
-  if (vscode.workspace.workspaceFolders.length > 1) {
-    return true;
-  } else {
-    return false;
-  }
+function collectDiagnosticEntries(
+  threshold: vscode.DiagnosticSeverity,
+  includeFolderName: boolean
+): DiagnosticEntry[] {
+  return vscode.languages
+    .getDiagnostics()
+    .map(([uri, diagnostics]): DiagnosticEntry => [
+      uri,
+      diagnostics
+        .filter((diagnostic) => diagnostic.severity <= threshold)
+        .slice()
+        .sort(
+          (left, right) =>
+            left.range.start.line - right.range.start.line ||
+            left.range.start.character - right.range.start.character
+        ),
+    ])
+    .filter(([, diagnostics]) => diagnostics.length > 0)
+    .sort((left, right) => {
+      const leftPath = vscode.workspace.asRelativePath(left[0], includeFolderName);
+      const rightPath = vscode.workspace.asRelativePath(right[0], includeFolderName);
+      return leftPath.localeCompare(rightPath);
+    });
 }
 
 export async function exportProblemsToMarkdown(): Promise<void> {
   const options = readOptions();
-
-  const includeFolderName = hasMultipleWorkspaceFolders();
-
-  const entries: [vscode.Uri, vscode.Diagnostic[]][] = vscode.languages
-    .getDiagnostics()
-    .map(([uri, diagnostics]): [vscode.Uri, vscode.Diagnostic[]] => [
-      uri,
-      diagnostics
-        .filter((d) => d.severity <= options.threshold)
-        .slice()
-        .sort((a, b) => a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character),
-    ])
-    .filter(([, diagnostics]) => diagnostics.length > 0)
-    .sort((a, b) =>
-      vscode.workspace.asRelativePath(a[0], includeFolderName).localeCompare(vscode.workspace.asRelativePath(b[0], includeFolderName))
-    );
+  const includeFolderName = shouldIncludeWorkspaceFolderName();
+  const entries = collectDiagnosticEntries(options.threshold, includeFolderName);
 
   if (entries.length === 0) {
     vscode.window.showInformationMessage('No problems found in workspace.');
@@ -161,7 +164,7 @@ export async function exportProblemsToMarkdown(): Promise<void> {
 }
 
 function buildMarkdown(
-  entries: [vscode.Uri, vscode.Diagnostic[]][],
+  entries: DiagnosticEntry[],
   includeFolderName: boolean,
   options: ExportOptions
 ): string {
@@ -202,7 +205,7 @@ function formatGroupHeading(title: string, includeSummary: boolean): string {
 }
 
 function buildByFile(
-  entries: [vscode.Uri, vscode.Diagnostic[]][],
+  entries: DiagnosticEntry[],
   includeFolderName: boolean,
   options: ExportOptions
 ): string[] {
@@ -222,7 +225,7 @@ function buildByFile(
 }
 
 function buildBySeverity(
-  entries: [vscode.Uri, vscode.Diagnostic[]][],
+  entries: DiagnosticEntry[],
   includeFolderName: boolean,
   options: ExportOptions
 ): string[] {
@@ -260,7 +263,7 @@ function buildBySeverity(
 }
 
 function buildFlatTable(
-  entries: [vscode.Uri, vscode.Diagnostic[]][],
+  entries: DiagnosticEntry[],
   includeFolderName: boolean,
   options: ExportOptions
 ): string[] {
