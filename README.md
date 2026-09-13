@@ -21,7 +21,7 @@ See [Settings](#settings) for all options.
 Example output produced:
 
 ```markdown
-## src/index.ts
+# src/index.ts
 - **Line 12:5** Error [ts, 2322]: Type 'string' is not assignable to type 'number'.
 - **Line 30:1** Warning [eslint, no-unused-vars]: 'foo' is declared but never used.
 ```
@@ -39,8 +39,8 @@ Example output produced:
 | `exportProblems.openAfterExport` | boolean | `true` | Open the exported file after writing (ignored for `clipboard`). |
 
 ### Grouping (`groupBy`)
-- `file`: one `## <path>` section per file (default, shown above).
-- `severity`: one section per severity (`## Errors`, `## Warnings`, ...), with the file path in each entry.
+- `file`: one heading per file (`# <path>` by default, or `## <path>` beneath an included summary).
+- `severity`: one heading per severity (`# Errors` by default, or `## Errors` beneath an included summary), with the file path in each entry.
 - `flat-table`: a single Markdown table, one row per diagnostic:
 ```markdown
 | Severity | File | Line | Source | Message |

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Disable the summary header by default; it remains available through `exportProblems.includeSummary`.
+- Promote file and severity group headings to H1 when the summary is omitted, while retaining H2 beneath an included summary.
 
 ## [1.0.0] - 2026-09-11
 

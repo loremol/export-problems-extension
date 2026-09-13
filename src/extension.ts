@@ -183,6 +183,10 @@ function buildMarkdown(
   return lines.join('\n');
 }
 
+function formatGroupHeading(title: string, includeSummary: boolean): string {
+  return `${includeSummary ? '##' : '#'} ${title}`;
+}
+
 function buildByFile(
   entries: [vscode.Uri, vscode.Diagnostic[]][],
   includeFolderName: boolean,
@@ -191,7 +195,7 @@ function buildByFile(
   const lines: string[] = [];
   for (const [uri, diagnostics] of entries) {
     const path = formatInlineText(vscode.workspace.asRelativePath(uri, includeFolderName));
-    lines.push(`## ${path}`, '');
+    lines.push(formatGroupHeading(path, options.includeSummary), '');
     for (const diagnostic of diagnostics) {
       const loc = formatLocation(diagnostic, options.includeColumn);
       const label = severityLabels[diagnostic.severity];
@@ -228,7 +232,7 @@ function buildBySeverity(
         a.diagnostic.range.start.line - b.diagnostic.range.start.line ||
         a.diagnostic.range.start.character - b.diagnostic.range.start.character
     );
-    lines.push(`## ${severityHeadings[severity]}`, '');
+    lines.push(formatGroupHeading(severityHeadings[severity], options.includeSummary), '');
     for (const { path, diagnostic } of items) {
       const loc = formatLocation(diagnostic, options.includeColumn);
       const tag = formatSourceTag(diagnostic, options.includeSource);

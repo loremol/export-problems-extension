@@ -227,7 +227,7 @@ function activateExtension(extension: ExtensionModule): void {
   extension.activate({ subscriptions: [] });
 }
 
-test('omits the summary when includeSummary is not configured', async () => {
+test('omits the summary and uses the file name as H1 when includeSummary is not configured', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-default-summary');
   const host = createVscode(workspaceRoot, 'problems.md', {
     configuration: { outputMode: 'clipboard' },
@@ -240,13 +240,58 @@ test('omits the summary when includeSummary is not configured', async () => {
   assert.equal(
     host.getClipboardText(),
     [
-      '## source.ts',
+      '# source.ts',
       '',
       '- **Line 1:1** Error: Example problem',
       '',
     ].join('\n')
   );
 });
+
+const headingHierarchyCases: ReadonlyArray<{
+  name: string;
+  configuration: Pick<ExportConfiguration, 'groupBy' | 'includeSummary'>;
+  expectedHeadings: string[];
+}> = [
+  {
+    name: 'file grouping without a summary',
+    configuration: { groupBy: 'file', includeSummary: false },
+    expectedHeadings: ['# source.ts'],
+  },
+  {
+    name: 'severity grouping without a summary',
+    configuration: { groupBy: 'severity', includeSummary: false },
+    expectedHeadings: ['# Errors'],
+  },
+  {
+    name: 'file grouping with a summary',
+    configuration: { groupBy: 'file', includeSummary: true },
+    expectedHeadings: ['# Problems Export', '## source.ts'],
+  },
+  {
+    name: 'severity grouping with a summary',
+    configuration: { groupBy: 'severity', includeSummary: true },
+    expectedHeadings: ['# Problems Export', '## Errors'],
+  },
+];
+
+for (const { name, configuration, expectedHeadings } of headingHierarchyCases) {
+  test(`uses a valid heading hierarchy for ${name}`, async () => {
+    const workspaceRoot = path.join(tmpdir(), 'export-problems-heading-hierarchy');
+    const host = createVscode(workspaceRoot, 'problems.md', {
+      configuration: { ...configuration, outputMode: 'clipboard' },
+    });
+    const extension = loadExtension(host.vscode);
+    activateExtension(extension);
+
+    await host.getRegisteredCommand()();
+
+    const headings = host.getClipboardText()
+      ?.split('\n')
+      .filter((line) => line.startsWith('#'));
+    assert.deepEqual(headings, expectedHeadings);
+  });
+}
 
 test('requires save confirmation instead of writing an escaping workspace target', async (t) => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
@@ -290,7 +335,7 @@ const literalMarkdownCases: ReadonlyArray<{
   {
     groupBy: 'file',
     expected: [
-      `## ${literalPath}`,
+      `# ${literalPath}`,
       '',
       `- **Line 1:1** Error [${literalSourceAndCode}]: ${literalMessage}`,
       '',
@@ -299,7 +344,7 @@ const literalMarkdownCases: ReadonlyArray<{
   {
     groupBy: 'severity',
     expected: [
-      '## Errors',
+      '# Errors',
       '',
       `- **${literalPath}:1:1** [${literalSourceAndCode}]: ${literalMessage}`,
       '',
