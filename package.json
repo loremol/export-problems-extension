@@ -2,7 +2,7 @@
   "name": "export-problems-to-markdown",
   "displayName": "Export Problems to Markdown",
   "description": "Export all diagnostics from the Problems panel (errors, warnings, info, hints) to a grouped Markdown file.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "loremol",
   "license": "MIT",
   "icon": "icon.png",
@@ -123,7 +123,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
+    "compile": "npm run clean && tsc -p ./",
     "compile:test": "tsc -p ./test/tsconfig.json",
     "test": "npm run compile && npm run compile:test && node --test .test-out/test/exportProblemsToMarkdown.test.js .test-out/test/workspacePathSecurity.test.js",
     "watch": "tsc -watch -p ./",

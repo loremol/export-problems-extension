@@ -4,6 +4,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-14
+
 ### Added
 
 - Add VS Code Marketplace and Open VSX release badges to the README.
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Prevent stale compiled JavaScript from being included in packaged extensions by cleaning the output directory before each build.
 - Preserve backslash-prefixed pipes as literal content inside flat Markdown table cells.
 - Create missing parent directories for automatic `workspace-file` exports.
 
