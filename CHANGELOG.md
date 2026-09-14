@@ -4,6 +4,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add VS Code Marketplace and Open VSX release badges to the README.
+- Expand regression coverage for multi-root exports, severity filtering and ordering, every output layout and summary combination, save-dialog, clipboard, and `workspace-file` success and failure paths, diagnostic code formatting, Markdown escaping, and workspace target security across platforms.
+
+### Changed
+
+- Isolate the export command from extension activation, split configuration, diagnostic collection, Markdown generation, target selection, delivery, and completion into documented helpers, and remove a redundant diagnostic-array copy.
+- Extracted methods from document workspace target resolution into lexical, existing-path, and canonical validation steps.
+- Rename the export workflow test suite and npm test target from `extension` to `exportProblemsToMarkdown`.
+
+### Fixed
+
+- Preserve backslash-prefixed pipes as literal content inside flat Markdown table cells.
+- Create missing parent directories for automatic `workspace-file` exports.
+
+### Security
+
+- Reject automatic export targets that are directories, contain non-directory parent components, or are files with multiple hard links, falling back to save-dialog confirmation.
+- Bind automatic target validation to the file write by revalidating after parent creation and file opening, refusing symbolic-link traversal, confirming that the opened descriptor still identifies the validated single-link file, and writing through that descriptor.
+- Create new automatic export files exclusively with mode `0600` where supported, and fall back to a save dialog when the filesystem changes during validation or opening.
+
 ## [1.1.0] - 2026-09-13
 
 ### Added
