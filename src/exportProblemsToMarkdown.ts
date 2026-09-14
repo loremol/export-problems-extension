@@ -45,6 +45,7 @@ interface ExportOptions {
   openAfterExport: boolean;
 }
 
+// Reads the configured export options
 function readOptions(): ExportOptions {
   const config = vscode.workspace.getConfiguration('exportProblems');
   const minimumSeverityName = config.get<string>('minimumSeverity', 'Hint');
@@ -63,10 +64,12 @@ function readOptions(): ExportOptions {
   };
 }
 
+// Returns true if there is more than one workspace open in the same window
 function shouldIncludeWorkspaceFolderName(): boolean {
   return (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
 }
 
+// Collects matching diagnostics in stable path and position order
 function collectDiagnosticEntries(
   threshold: vscode.DiagnosticSeverity,
   includeFolderName: boolean
@@ -91,6 +94,7 @@ function collectDiagnosticEntries(
     });
 }
 
+// Exports the current workspace diagnostics as Markdown
 export async function exportProblemsToMarkdown(): Promise<void> {
   const options = readOptions();
   const includeFolderName = shouldIncludeWorkspaceFolderName();
@@ -105,6 +109,7 @@ export async function exportProblemsToMarkdown(): Promise<void> {
   await deliverMarkdown(content, options);
 }
 
+// Sends generated Markdown to the configured destination
 async function deliverMarkdown(content: string, options: ExportOptions): Promise<void> {
   if (options.outputMode === 'clipboard') {
     await vscode.env.clipboard.writeText(content);
@@ -120,6 +125,7 @@ async function deliverMarkdown(content: string, options: ExportOptions): Promise
   await writeMarkdownFile(targetUri, content, options.openAfterExport);
 }
 
+// Resolves the output URI for the configured file destination
 async function selectOutputUri(options: ExportOptions): Promise<vscode.Uri | undefined> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
@@ -151,6 +157,7 @@ async function selectOutputUri(options: ExportOptions): Promise<vscode.Uri | und
   return showMarkdownSaveDialog(defaultUri);
 }
 
+// Opens the Markdown export save dialog
 function showMarkdownSaveDialog(
   defaultUri?: vscode.Uri
 ): Thenable<vscode.Uri | undefined> {
@@ -161,6 +168,7 @@ function showMarkdownSaveDialog(
   });
 }
 
+// Writes Markdown and reports or opens the exported file
 async function writeMarkdownFile(
   targetUri: vscode.Uri,
   content: string,
@@ -179,6 +187,7 @@ async function writeMarkdownFile(
   );
 }
 
+// Builds the complete Markdown export by choosing the right strategy based on options
 function buildMarkdown(
   entries: DiagnosticEntry[],
   includeFolderName: boolean,
@@ -216,10 +225,12 @@ function buildMarkdown(
   return lines.join('\n');
 }
 
+// Formats a group heading at the appropriate document level
 function formatGroupHeading(title: string, includeSummary: boolean): string {
   return `${includeSummary ? '##' : '#'} ${title}`;
 }
 
+// Builds Markdown grouped by file
 function buildByFile(
   entries: DiagnosticEntry[],
   includeFolderName: boolean,
@@ -240,6 +251,7 @@ function buildByFile(
   return lines;
 }
 
+// Builds Markdown grouped by severity
 function buildBySeverity(
   entries: DiagnosticEntry[],
   includeFolderName: boolean,
@@ -278,6 +290,7 @@ function buildBySeverity(
   return lines;
 }
 
+// Builds diagnostics as a single Markdown table
 function buildFlatTable(
   entries: DiagnosticEntry[],
   includeFolderName: boolean,
@@ -313,6 +326,7 @@ function buildFlatTable(
   return lines;
 }
 
+// Formats a diagnostic's one-based line and optional column
 function formatLocation(diagnostic: vscode.Diagnostic, includeColumn: boolean): string {
   const line = diagnostic.range.start.line + 1;
   if (!includeColumn) {
@@ -322,6 +336,7 @@ function formatLocation(diagnostic: vscode.Diagnostic, includeColumn: boolean): 
   return `${line}:${column}`;
 }
 
+// Formats a diagnostic's available source and code
 function formatSourceAndCode(
   diagnostic: vscode.Diagnostic,
   escapeText: (value: string) => string
@@ -337,6 +352,7 @@ function formatSourceAndCode(
   return parts.join(', ');
 }
 
+// Formats a diagnostic source and code as an inline tag
 function formatSourceTag(diagnostic: vscode.Diagnostic, includeSource: boolean): string {
   if (!includeSource) {
     return '';
@@ -345,14 +361,17 @@ function formatSourceTag(diagnostic: vscode.Diagnostic, includeSource: boolean):
   return sourceAndCode ? ` [${sourceAndCode}]` : '';
 }
 
+// Collapses line breaks for inline Markdown output
 function formatInlineText(value: string): string {
   return value.replace(/[\r\n]+/g, ' ');
 }
 
+// Formats text for use in a Markdown table cell
 function formatTableCell(value: string): string {
   return formatInlineText(value).replace(/\|/g, '\\|');
 }
 
+// Normalizes a diagnostic code to text
 function formatCode(code: vscode.Diagnostic['code']): string {
   if (code === undefined) {
     return '';

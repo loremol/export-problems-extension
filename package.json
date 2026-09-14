@@ -125,7 +125,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "compile:test": "tsc -p ./test/tsconfig.json",
-    "test": "npm run compile && npm run compile:test && node --test .test-out/test/extension.test.js .test-out/test/workspacePathSecurity.test.js",
+    "test": "npm run compile && npm run compile:test && node --test .test-out/test/exportProblemsToMarkdown.test.js .test-out/test/workspacePathSecurity.test.js",
     "watch": "tsc -watch -p ./",
     "package": "npx @vscode/vsce package"
   },

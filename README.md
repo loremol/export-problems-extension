@@ -1,16 +1,21 @@
 # Export Problems to Markdown
-Export everything in the VS Code / VSCodium "Problems" panel to a Markdown file with customizable filtering, grouping and export options.
+
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/loremol.export-problems-to-markdown.svg)](https://marketplace.visualstudio.com/items?itemName=loremol.export-problems-to-markdown)
+[![Open VSX Registry](https://img.shields.io/open-vsx/v/loremol/export-problems-to-markdown?label=Open%20VSX)](https://open-vsx.org/extension/loremol/export-problems-to-markdown)
+
+Export everything from the VS Code / VSCodium "Problems" panel to a Markdown file with customizable filtering, grouping and export options.
 
 ## Features
 - Exports all diagnostics (errors, warnings, info, hints) across the whole workspace.
 - Each entry shows line:column, severity, source, code, and message.
-- Configurable layout: group by file, group by severity, or a single flat table.
+- Configurable layout: group by file, group by severity, or by a single flat table.
 - Configurable output:
     1. specify the output every time with save dialog
     2. automatic file write in the workspace
     3. copy to the clipboard
 - Filter by minimum severity, and toggle the header block, source/code tags, and column numbers.
 - Insecure paths submitted by the user are rejected and prompt a new save dialog
+- With multiple workspaces open in the same window, it adds folder headers
 
 See [Settings](#settings) for all options.
 
