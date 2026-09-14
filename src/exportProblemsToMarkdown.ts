@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
-import { selectWorkspaceFileTarget } from './workspacePathSecurity';
+import {
+  getSafeDialogFileName,
+  selectWorkspaceFileTarget,
+  writeFileToSafeWorkspaceTarget,
+} from './workspacePathSecurity';
 
 const severityLabels: Record<vscode.DiagnosticSeverity, string> = {
   [vscode.DiagnosticSeverity.Error]: 'Error',
@@ -44,6 +48,15 @@ interface ExportOptions {
   outputMode: 'save-dialog' | 'workspace-file' | 'clipboard';
   openAfterExport: boolean;
 }
+
+type OutputTarget =
+  | {
+      kind: 'automatic';
+      workspacePath: string;
+      configuredPath: string;
+      fallbackUri: vscode.Uri;
+    }
+  | { kind: 'selected'; uri: vscode.Uri };
 
 // Reads the configured export options
 function readOptions(): ExportOptions {
@@ -117,16 +130,37 @@ async function deliverMarkdown(content: string, options: ExportOptions): Promise
     return;
   }
 
-  const targetUri = await selectOutputUri(options);
-  if (!targetUri) {
+  const target = await selectOutputTarget(options);
+  if (!target) {
     return;
   }
 
-  await writeMarkdownFile(targetUri, content, options.openAfterExport);
+  if (target.kind === 'selected') {
+    await writeMarkdownFile(target.uri, content, options.openAfterExport);
+    return;
+  }
+
+  const writtenPath = await writeFileToSafeWorkspaceTarget(
+    target.workspacePath,
+    target.configuredPath,
+    Buffer.from(content, 'utf8')
+  );
+  if (writtenPath) {
+    await completeMarkdownFileExport(
+      vscode.Uri.file(writtenPath),
+      options.openAfterExport
+    );
+    return;
+  }
+
+  const fallbackUri = await showMarkdownSaveDialog(target.fallbackUri);
+  if (fallbackUri) {
+    await writeMarkdownFile(fallbackUri, content, options.openAfterExport);
+  }
 }
 
-// Resolves the output URI for the configured file destination
-async function selectOutputUri(options: ExportOptions): Promise<vscode.Uri | undefined> {
+// Resolves automatic workspace output or a user-selected destination
+async function selectOutputTarget(options: ExportOptions): Promise<OutputTarget | undefined> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
   if (options.outputMode === 'workspace-file') {
@@ -143,18 +177,28 @@ async function selectOutputUri(options: ExportOptions): Promise<vscode.Uri | und
       options.defaultFileName
     );
     if (target.kind === 'automatic') {
-      return vscode.Uri.file(target.targetPath);
+      return {
+        kind: 'automatic',
+        workspacePath: workspaceFolder.uri.fsPath,
+        configuredPath: options.defaultFileName,
+        fallbackUri: vscode.Uri.joinPath(
+          workspaceFolder.uri,
+          getSafeDialogFileName(options.defaultFileName)
+        ),
+      };
     }
 
-    return showMarkdownSaveDialog(
+    const selectedUri = await showMarkdownSaveDialog(
       vscode.Uri.joinPath(workspaceFolder.uri, target.fileName)
     );
+    return selectedUri ? { kind: 'selected', uri: selectedUri } : undefined;
   }
 
   const defaultUri = workspaceFolder
     ? vscode.Uri.joinPath(workspaceFolder.uri, options.defaultFileName)
     : undefined;
-  return showMarkdownSaveDialog(defaultUri);
+  const selectedUri = await showMarkdownSaveDialog(defaultUri);
+  return selectedUri ? { kind: 'selected', uri: selectedUri } : undefined;
 }
 
 // Opens the Markdown export save dialog
@@ -168,14 +212,21 @@ function showMarkdownSaveDialog(
   });
 }
 
-// Writes Markdown and reports or opens the exported file
+// Writes Markdown to a user-selected URI
 async function writeMarkdownFile(
   targetUri: vscode.Uri,
   content: string,
   openAfterExport: boolean
 ): Promise<void> {
   await vscode.workspace.fs.writeFile(targetUri, Buffer.from(content, 'utf8'));
+  await completeMarkdownFileExport(targetUri, openAfterExport);
+}
 
+// Reports or opens a completed file export
+async function completeMarkdownFileExport(
+  targetUri: vscode.Uri,
+  openAfterExport: boolean
+): Promise<void> {
   if (openAfterExport) {
     const document = await vscode.workspace.openTextDocument(targetUri);
     await vscode.window.showTextDocument(document);

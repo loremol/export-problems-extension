@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fsPromises = require('node:fs/promises');
 import {
   link,
   mkdir,
@@ -568,6 +569,36 @@ test('creates missing parent directories for a workspace-file target', async (t)
   assert.match(await readFile(targetPath, 'utf8'), /Example problem/);
 });
 
+test('overwrites an existing single-link workspace file without prompting', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-overwrite-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const targetPath = path.join(workspaceRoot, 'problems.md');
+  await writeFile(targetPath, 'stale export');
+
+  const host = createVscode(workspaceRoot, 'problems.md');
+  host.vscode.workspace.fs.writeFile = async (uri, content) => {
+    await writeFile(uri.fsPath, content);
+  };
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.saveDialogs.length, 0);
+  assert.equal(
+    await readFile(targetPath, 'utf8'),
+    [
+      '# Problems',
+      '',
+      '## source.ts',
+      '',
+      '- **Line 1:1** Error: Example problem',
+      '',
+    ].join('\n')
+  );
+});
+
 test('does not escape when a validated parent is replaced before writing', async (t) => {
   const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-parent-swap-'));
   t.after(() => rm(tempRoot, { recursive: true, force: true }));
@@ -580,10 +611,30 @@ test('does not escape when a validated parent is replaced before writing', async
   await mkdir(reportsDirectory, { recursive: true });
   await mkdir(outsideDirectory);
 
-  const host = createVscode(workspaceRoot, path.join('reports', 'problems.md'));
-  host.vscode.workspace.fs.writeFile = async (uri, content) => {
+  let parentReplaced = false;
+  const replaceParent = async (): Promise<void> => {
+    if (parentReplaced) {
+      return;
+    }
+    parentReplaced = true;
     await rename(reportsDirectory, originalReportsDirectory);
     await symlink(outsideDirectory, reportsDirectory, 'dir');
+  };
+
+  const realOpen = fsPromises.open;
+  t.mock.method(
+    fsPromises,
+    'open',
+    (async (...args: Parameters<typeof fsPromises.open>) => {
+      const handle = await realOpen(...args);
+      await replaceParent();
+      return handle;
+    }) as typeof fsPromises.open
+  );
+
+  const host = createVscode(workspaceRoot, path.join('reports', 'problems.md'));
+  host.vscode.workspace.fs.writeFile = async (uri, content) => {
+    await replaceParent();
     await writeFile(uri.fsPath, content);
   };
   const extension = loadExtension(host.vscode);
@@ -591,6 +642,9 @@ test('does not escape when a validated parent is replaced before writing', async
 
   await host.getRegisteredCommand()();
 
+  assert.equal(parentReplaced, true);
+  assert.equal(host.saveDialogs.length, 1);
+  assert.equal(await readFile(path.join(originalReportsDirectory, 'problems.md'), 'utf8'), '');
   await assert.rejects(readFile(outsideFile), { code: 'ENOENT' });
 });
 

@@ -1,4 +1,5 @@
-import { lstat, realpath } from 'node:fs/promises';
+import { constants, type Stats } from 'node:fs';
+import { lstat, mkdir, open, realpath, type FileHandle } from 'node:fs/promises';
 import * as path from 'node:path';
 
 type PathSemantics = Pick<typeof path, 'isAbsolute' | 'relative' | 'sep'>;
@@ -172,6 +173,117 @@ export async function resolveSafeWorkspaceTarget(
     canonicalExistingPath,
     existingTarget.missingSegments
   );
+}
+
+const pathStateErrorCodes = new Set(['EEXIST', 'EISDIR', 'ELOOP', 'ENOENT', 'ENOTDIR']);
+
+// Returns true when an error can indicate that a path changed during validation
+function isPathStateError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    pathStateErrorCodes.has(error.code)
+  );
+}
+
+// Returns true when two stats identify the same filesystem object
+function isSameFile(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+// Writes only while the configured target remains a safe workspace file
+export async function writeFileToSafeWorkspaceTarget(
+  workspaceRoot: string,
+  configuredPath: string,
+  content: Uint8Array
+): Promise<string | undefined> {
+  const initialTarget = await resolveSafeWorkspaceTarget(workspaceRoot, configuredPath);
+  if (!initialTarget) {
+    return undefined;
+  }
+
+  try {
+    await mkdir(path.dirname(initialTarget), { recursive: true });
+  } catch (error) {
+    if (isPathStateError(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+
+  const targetPath = await resolveSafeWorkspaceTarget(workspaceRoot, configuredPath);
+  if (targetPath !== initialTarget) {
+    return undefined;
+  }
+
+  const noFollow = constants.O_NOFOLLOW ?? 0;
+  let targetHandle: FileHandle | undefined;
+  try {
+    targetHandle = await open(targetPath, constants.O_WRONLY | noFollow);
+  } catch (error) {
+    if (!isPathStateError(error)) {
+      throw error;
+    }
+  }
+
+  if (!targetHandle) {
+    const targetBeforeCreation = await resolveSafeWorkspaceTarget(
+      workspaceRoot,
+      configuredPath
+    );
+    if (targetBeforeCreation !== targetPath) {
+      return undefined;
+    }
+
+    try {
+      targetHandle = await open(
+        targetPath,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow,
+        0o600
+      );
+    } catch (error) {
+      if (isPathStateError(error)) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  try {
+    const currentTarget = await resolveSafeWorkspaceTarget(workspaceRoot, configuredPath);
+    if (currentTarget !== targetPath) {
+      return undefined;
+    }
+
+    let currentStat: Stats;
+    try {
+      currentStat = await lstat(targetPath);
+    } catch (error) {
+      if (isPathStateError(error)) {
+        return undefined;
+      }
+      throw error;
+    }
+
+    const openedStat = await targetHandle.stat();
+    if (
+      !openedStat.isFile() ||
+      openedStat.nlink !== 1 ||
+      currentStat.isSymbolicLink() ||
+      !currentStat.isFile() ||
+      currentStat.nlink !== 1 ||
+      !isSameFile(openedStat, currentStat)
+    ) {
+      return undefined;
+    }
+
+    await targetHandle.truncate(0);
+    await targetHandle.writeFile(content);
+    return targetPath;
+  } finally {
+    await targetHandle.close();
+  }
 }
 
 // Returns true when a target is a strict descendant of a root
