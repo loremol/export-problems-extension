@@ -368,7 +368,10 @@ function formatInlineText(value: string): string {
 
 // Formats text for use in a Markdown table cell
 function formatTableCell(value: string): string {
-  return formatInlineText(value).replace(/\|/g, '\\|');
+  return formatInlineText(value).replace(
+    /(\\*)\|/g,
+    (_match, backslashes: string) => `${backslashes.repeat(2)}\\|`
+  );
 }
 
 // Normalizes a diagnostic code to text
