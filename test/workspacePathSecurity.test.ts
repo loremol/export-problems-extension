@@ -29,6 +29,30 @@ test('resolves a new file beneath a canonical workspace root', async (t) => {
   assert.equal(actual, expectedTarget);
 });
 
+test('rejects targets that are not strict workspace descendants', async (t) => {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+
+  const workspaceRoot = path.join(tempRoot, 'workspace');
+  await mkdir(workspaceRoot);
+
+  const cases = [
+    { name: 'empty path', configuredPath: '' },
+    { name: 'current directory', configuredPath: '.' },
+    { name: 'normalized current directory', configuredPath: `nested${path.sep}..` },
+    { name: 'absolute outside path', configuredPath: path.join(tempRoot, 'outside.md') },
+    {
+      name: 'sibling-prefix path',
+      configuredPath: path.join(`${workspaceRoot}-other`, 'problems.md'),
+    },
+  ];
+
+  for (const { name, configuredPath } of cases) {
+    const actual = await resolveSafeWorkspaceTarget(workspaceRoot, configuredPath);
+    assert.equal(actual, undefined, name);
+  }
+});
+
 test('resolves missing target segments beneath an existing workspace directory', async (t) => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
   t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
@@ -44,6 +68,20 @@ test('resolves missing target segments beneath an existing workspace directory',
   );
 
   assert.equal(actual, expectedTarget);
+});
+
+test('rejects a target below an intermediate regular file', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  await writeFile(path.join(workspaceRoot, 'exports'), 'not a directory');
+
+  const actual = await resolveSafeWorkspaceTarget(
+    workspaceRoot,
+    path.join('exports', 'problems.md')
+  );
+
+  assert.equal(actual, undefined);
 });
 
 test('resolves an existing regular file beneath the workspace', async (t) => {
@@ -119,6 +157,35 @@ test('rejects a target that is a symbolic link', async (t) => {
   const actual = await resolveSafeWorkspaceTarget(workspaceRoot, 'problems.md');
 
   assert.equal(actual, undefined);
+});
+
+test('rejects broken and workspace-internal symbolic-link targets', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const internalFile = path.join(workspaceRoot, 'existing.md');
+  await writeFile(internalFile, 'existing export');
+
+  const brokenLink = path.join(workspaceRoot, 'broken.md');
+  const internalLink = path.join(workspaceRoot, 'internal.md');
+  try {
+    await symlink(path.join(workspaceRoot, 'missing.md'), brokenLink, 'file');
+    await symlink(internalFile, internalLink, 'file');
+  } catch (error) {
+    if (isPermissionError(error)) {
+      t.skip('Creating file symlinks is not permitted on this Windows host.');
+      return;
+    }
+    throw error;
+  }
+
+  const brokenTarget = await resolveSafeWorkspaceTarget(workspaceRoot, 'broken.md');
+  const internalTarget = await resolveSafeWorkspaceTarget(workspaceRoot, 'internal.md');
+
+  assert.deepEqual(
+    { brokenTarget, internalTarget },
+    { brokenTarget: undefined, internalTarget: undefined }
+  );
 });
 
 test('rejects a target beneath a symbolic-link directory', async (t) => {
