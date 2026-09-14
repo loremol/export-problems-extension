@@ -94,7 +94,12 @@ async function findNearestExistingTargetPath(
     currentPath = path.join(currentPath, segment);
     try {
       const currentStat = await lstat(currentPath);
-      if (currentStat.isSymbolicLink()) {
+      const isTarget = index === targetSegments.length - 1;
+      if (
+        currentStat.isSymbolicLink() ||
+        (isTarget && (!currentStat.isFile() || currentStat.nlink !== 1)) ||
+        (!isTarget && !currentStat.isDirectory())
+      ) {
         return undefined;
       }
       nearestExistingPath = currentPath;
