@@ -29,6 +29,41 @@ test('resolves a new file beneath a canonical workspace root', async (t) => {
   assert.equal(actual, expectedTarget);
 });
 
+test('resolves missing target segments beneath an existing workspace directory', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const exportsDirectory = path.join(workspaceRoot, 'exports');
+  await mkdir(exportsDirectory);
+
+  const canonicalRoot = await realpath(workspaceRoot);
+  const expectedTarget = path.join(canonicalRoot, 'exports', 'nested', 'problems.md');
+  const actual = await resolveSafeWorkspaceTarget(
+    workspaceRoot,
+    path.join('exports', 'nested', 'problems.md')
+  );
+
+  assert.equal(actual, expectedTarget);
+});
+
+test('resolves an existing regular file beneath the workspace', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const exportsDirectory = path.join(workspaceRoot, 'exports');
+  const targetPath = path.join(exportsDirectory, 'problems.md');
+  await mkdir(exportsDirectory);
+  await writeFile(targetPath, 'existing export');
+
+  const expectedTarget = await realpath(targetPath);
+  const actual = await resolveSafeWorkspaceTarget(
+    workspaceRoot,
+    path.join('exports', 'problems.md')
+  );
+
+  assert.equal(actual, expectedTarget);
+});
+
 test('fails closed when the workspace root cannot be canonicalized', async (t) => {
   const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
   t.after(() => rm(tempRoot, { recursive: true, force: true }));
