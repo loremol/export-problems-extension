@@ -1,5 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import {
+  link,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import Module = require('node:module');
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -536,23 +546,76 @@ test('reports an error when workspace-file mode has no open workspace', async ()
   assert.equal(host.writes.length, 0);
 });
 
-test('writes a validated workspace-file target without prompting', async (t) => {
+test('creates missing parent directories for a workspace-file target', async (t) => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-write-'));
   t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
 
-  const host = createVscode(workspaceRoot, path.join('reports', 'problems.md'));
+  const reportsDirectory = path.join(workspaceRoot, 'reports');
+  const nestedDirectory = path.join(reportsDirectory, 'nested');
+  const targetPath = path.join(nestedDirectory, 'problems.md');
+  const host = createVscode(workspaceRoot, path.join('reports', 'nested', 'problems.md'));
+  host.vscode.workspace.fs.writeFile = async (uri, content) => {
+    await writeFile(uri.fsPath, content);
+  };
   const extension = loadExtension(host.vscode);
   activateExtension(extension);
 
   await host.getRegisteredCommand()();
 
   assert.equal(host.saveDialogs.length, 0);
-  assert.equal(host.writes.length, 1);
-  assert.equal(
-    host.writes[0].uri.fsPath,
-    path.join(workspaceRoot, 'reports', 'problems.md')
-  );
-  assert.match(Buffer.from(host.writes[0].content).toString('utf8'), /Example problem/);
+  assert.equal((await stat(reportsDirectory)).isDirectory(), true);
+  assert.equal((await stat(nestedDirectory)).isDirectory(), true);
+  assert.match(await readFile(targetPath, 'utf8'), /Example problem/);
+});
+
+test('does not escape when a validated parent is replaced before writing', async (t) => {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-parent-swap-'));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+
+  const workspaceRoot = path.join(tempRoot, 'workspace');
+  const reportsDirectory = path.join(workspaceRoot, 'reports');
+  const originalReportsDirectory = path.join(workspaceRoot, 'original-reports');
+  const outsideDirectory = path.join(tempRoot, 'outside');
+  const outsideFile = path.join(outsideDirectory, 'problems.md');
+  await mkdir(reportsDirectory, { recursive: true });
+  await mkdir(outsideDirectory);
+
+  const host = createVscode(workspaceRoot, path.join('reports', 'problems.md'));
+  host.vscode.workspace.fs.writeFile = async (uri, content) => {
+    await rename(reportsDirectory, originalReportsDirectory);
+    await symlink(outsideDirectory, reportsDirectory, 'dir');
+    await writeFile(uri.fsPath, content);
+  };
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  await assert.rejects(readFile(outsideFile), { code: 'ENOENT' });
+});
+
+test('does not overwrite an outside file through an in-workspace hard link', async (t) => {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-hard-link-'));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+
+  const workspaceRoot = path.join(tempRoot, 'workspace');
+  const outsideFile = path.join(tempRoot, 'outside.md');
+  const sentinel = 'outside sentinel';
+  await mkdir(workspaceRoot);
+  await writeFile(outsideFile, sentinel);
+  await link(outsideFile, path.join(workspaceRoot, 'problems.md'));
+
+  const host = createVscode(workspaceRoot, 'problems.md');
+  host.vscode.workspace.fs.writeFile = async (uri, content) => {
+    await writeFile(uri.fsPath, content);
+  };
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(await readFile(outsideFile, 'utf8'), sentinel);
+  assert.equal(host.saveDialogs.length, 1);
 });
 
 test('opens the exported workspace file when configured', async (t) => {
@@ -590,6 +653,33 @@ test('requires save confirmation instead of writing an escaping workspace target
     host.saveDialogs[0].defaultUri?.fsPath,
     path.join(workspaceRoot, 'outside.md')
   );
+});
+
+test('keeps a backslash-prefixed pipe inside one Markdown table cell', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-backslash-pipe');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      groupBy: 'flat-table',
+      includeSummary: false,
+      outputMode: 'clipboard',
+    },
+    diagnostics: [{
+      severity: 0,
+      range: createRange(),
+      source: 'lint\\|source',
+      message: 'message\\|detail',
+    }],
+    relativePath: 'src/path\\|segment.ts',
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const tableRow = host.getClipboardText()?.split('\n')[2];
+  assert.ok(tableRow);
+  const unescapedDelimiterPipes = tableRow.match(/(?<!\\)(?:\\\\)*\|/g) ?? [];
+  assert.equal(unescapedDelimiterPipes.length, 6);
 });
 
 const diagnosticRelativePath = 'src/\n## fake <img>& [path](url) | file.ts';

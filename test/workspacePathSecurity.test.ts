@@ -64,6 +64,28 @@ test('resolves an existing regular file beneath the workspace', async (t) => {
   assert.equal(actual, expectedTarget);
 });
 
+test('rejects an existing directory target and selects a save-dialog fallback', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  await mkdir(path.join(workspaceRoot, 'problems.md'));
+
+  const resolvedTarget = await resolveSafeWorkspaceTarget(workspaceRoot, 'problems.md');
+  const selectedTarget = await selectWorkspaceFileTarget(
+    'file',
+    workspaceRoot,
+    'problems.md'
+  );
+
+  assert.deepEqual(
+    { resolvedTarget, selectedTarget },
+    {
+      resolvedTarget: undefined,
+      selectedTarget: { kind: 'save-dialog', fileName: 'problems.md' },
+    }
+  );
+});
+
 test('fails closed when the workspace root cannot be canonicalized', async (t) => {
   const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
   t.after(() => rm(tempRoot, { recursive: true, force: true }));
