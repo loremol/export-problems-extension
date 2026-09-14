@@ -8,6 +8,11 @@ interface LexicalWorkspaceTarget {
   targetSegments: string[];
 }
 
+interface ExistingTargetPath {
+  nearestExistingPath: string;
+  missingSegments: string[];
+}
+
 const defaultExportFileName = 'problems-export.md';
 const invalidPortableFileNameCharacter = /[\u0000-\u001f<>:"/\\|?*]/;
 const windowsReservedFileName = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
@@ -73,6 +78,53 @@ async function tryRealpath(targetPath: string): Promise<string | undefined> {
   }
 }
 
+async function findNearestExistingTargetPath(
+  lexicalRoot: string,
+  targetSegments: string[]
+): Promise<ExistingTargetPath | undefined> {
+  let currentPath = lexicalRoot;
+  let nearestExistingPath = lexicalRoot;
+
+  for (const [index, segment] of targetSegments.entries()) {
+    currentPath = path.join(currentPath, segment);
+    try {
+      const currentStat = await lstat(currentPath);
+      if (currentStat.isSymbolicLink()) {
+        return undefined;
+      }
+      nearestExistingPath = currentPath;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        return undefined;
+      }
+      return {
+        nearestExistingPath,
+        missingSegments: targetSegments.slice(index),
+      };
+    }
+  }
+
+  return { nearestExistingPath, missingSegments: [] };
+}
+
+function resolveCanonicalWorkspaceTarget(
+  canonicalRoot: string,
+  canonicalExistingPath: string,
+  missingSegments: string[]
+): string | undefined {
+  if (
+    path.relative(canonicalRoot, canonicalExistingPath) !== '' &&
+    !isPathStrictlyWithin(canonicalRoot, canonicalExistingPath)
+  ) {
+    return undefined;
+  }
+
+  const canonicalTarget = path.resolve(canonicalExistingPath, ...missingSegments);
+  return isPathStrictlyWithin(canonicalRoot, canonicalTarget)
+    ? canonicalTarget
+    : undefined;
+}
+
 export async function resolveSafeWorkspaceTarget(
   workspaceRoot: string,
   configuredPath: string
@@ -88,46 +140,26 @@ export async function resolveSafeWorkspaceTarget(
     return undefined;
   }
 
-  let currentPath = lexicalRoot;
-  let nearestExistingPath = lexicalRoot;
-  let firstMissingSegment = targetSegments.length;
-
-  for (const [index, segment] of targetSegments.entries()) {
-    currentPath = path.join(currentPath, segment);
-    try {
-      const currentStat = await lstat(currentPath);
-      if (currentStat.isSymbolicLink()) {
-        return undefined;
-      }
-      nearestExistingPath = currentPath;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        firstMissingSegment = index;
-        break;
-      }
-      return undefined;
-    }
+  const existingTarget = await findNearestExistingTargetPath(
+    lexicalRoot,
+    targetSegments
+  );
+  if (!existingTarget) {
+    return undefined;
   }
 
-  const canonicalExistingPath = await tryRealpath(nearestExistingPath);
+  const canonicalExistingPath = await tryRealpath(
+    existingTarget.nearestExistingPath
+  );
   if (!canonicalExistingPath) {
     return undefined;
   }
 
-  if (
-    path.relative(canonicalRoot, canonicalExistingPath) !== '' &&
-    !isPathStrictlyWithin(canonicalRoot, canonicalExistingPath)
-  ) {
-    return undefined;
-  }
-
-  const canonicalTarget = path.resolve(
+  return resolveCanonicalWorkspaceTarget(
+    canonicalRoot,
     canonicalExistingPath,
-    ...targetSegments.slice(firstMissingSegment)
+    existingTarget.missingSegments
   );
-  return isPathStrictlyWithin(canonicalRoot, canonicalTarget)
-    ? canonicalTarget
-    : undefined;
 }
 
 export function isPathStrictlyWithin(
