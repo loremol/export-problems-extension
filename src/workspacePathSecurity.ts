@@ -17,6 +17,7 @@ const defaultExportFileName = 'problems-export.md';
 const invalidPortableFileNameCharacter = /[\u0000-\u001f<>:"/\\|?*]/;
 const windowsReservedFileName = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
 
+// Returns a portable file name for save-dialog fallback
 export function getSafeDialogFileName(configuredPath: string): string {
   const fileName = path.win32.basename(path.posix.basename(configuredPath));
   if (
@@ -36,6 +37,7 @@ export type WorkspaceFileTarget =
   | { kind: 'automatic'; targetPath: string }
   | { kind: 'save-dialog'; fileName: string };
 
+// Selects automatic output for safe local targets or a save-dialog fallback
 export async function selectWorkspaceFileTarget(
   workspaceScheme: string,
   workspacePath: string,
@@ -54,6 +56,7 @@ export async function selectWorkspaceFileTarget(
   };
 }
 
+// Resolves a configured path as a strict lexical workspace descendant
 function resolveLexicalWorkspaceTarget(
   workspaceRoot: string,
   configuredPath: string
@@ -70,6 +73,7 @@ function resolveLexicalWorkspaceTarget(
   };
 }
 
+// Returns a path's canonical form, or undefined when resolution fails
 async function tryRealpath(targetPath: string): Promise<string | undefined> {
   try {
     return await realpath(targetPath);
@@ -78,6 +82,7 @@ async function tryRealpath(targetPath: string): Promise<string | undefined> {
   }
 }
 
+// Finds the nearest existing target path while rejecting symbolic links
 async function findNearestExistingTargetPath(
   lexicalRoot: string,
   targetSegments: string[]
@@ -107,6 +112,7 @@ async function findNearestExistingTargetPath(
   return { nearestExistingPath, missingSegments: [] };
 }
 
+// Rebuilds and validates a target beneath the canonical workspace root
 function resolveCanonicalWorkspaceTarget(
   canonicalRoot: string,
   canonicalExistingPath: string,
@@ -125,6 +131,7 @@ function resolveCanonicalWorkspaceTarget(
     : undefined;
 }
 
+// Resolves a configured target only when it remains safely inside the workspace
 export async function resolveSafeWorkspaceTarget(
   workspaceRoot: string,
   configuredPath: string
@@ -162,6 +169,7 @@ export async function resolveSafeWorkspaceTarget(
   );
 }
 
+// Returns true when a target is a strict descendant of a root
 export function isPathStrictlyWithin(
   rootPath: string,
   targetPath: string,
