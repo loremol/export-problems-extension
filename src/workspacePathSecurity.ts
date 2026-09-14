@@ -3,6 +3,11 @@ import * as path from 'node:path';
 
 type PathSemantics = Pick<typeof path, 'isAbsolute' | 'relative' | 'sep'>;
 
+interface LexicalWorkspaceTarget {
+  lexicalRoot: string;
+  targetSegments: string[];
+}
+
 const defaultExportFileName = 'problems-export.md';
 const invalidPortableFileNameCharacter = /[\u0000-\u001f<>:"/\\|?*]/;
 const windowsReservedFileName = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
@@ -44,25 +49,45 @@ export async function selectWorkspaceFileTarget(
   };
 }
 
-export async function resolveSafeWorkspaceTarget(
+function resolveLexicalWorkspaceTarget(
   workspaceRoot: string,
   configuredPath: string
-): Promise<string | undefined> {
+): LexicalWorkspaceTarget | undefined {
   const lexicalRoot = path.resolve(workspaceRoot);
   const lexicalTarget = path.resolve(lexicalRoot, configuredPath);
   if (!isPathStrictlyWithin(lexicalRoot, lexicalTarget)) {
     return undefined;
   }
 
-  let canonicalRoot: string;
+  return {
+    lexicalRoot,
+    targetSegments: path.relative(lexicalRoot, lexicalTarget).split(path.sep),
+  };
+}
+
+async function tryRealpath(targetPath: string): Promise<string | undefined> {
   try {
-    canonicalRoot = await realpath(lexicalRoot);
+    return await realpath(targetPath);
   } catch {
     return undefined;
   }
+}
 
-  const relativeTarget = path.relative(lexicalRoot, lexicalTarget);
-  const targetSegments = relativeTarget.split(path.sep);
+export async function resolveSafeWorkspaceTarget(
+  workspaceRoot: string,
+  configuredPath: string
+): Promise<string | undefined> {
+  const lexicalTarget = resolveLexicalWorkspaceTarget(workspaceRoot, configuredPath);
+  if (!lexicalTarget) {
+    return undefined;
+  }
+
+  const { lexicalRoot, targetSegments } = lexicalTarget;
+  const canonicalRoot = await tryRealpath(lexicalRoot);
+  if (!canonicalRoot) {
+    return undefined;
+  }
+
   let currentPath = lexicalRoot;
   let nearestExistingPath = lexicalRoot;
   let firstMissingSegment = targetSegments.length;
@@ -84,10 +109,8 @@ export async function resolveSafeWorkspaceTarget(
     }
   }
 
-  let canonicalExistingPath: string;
-  try {
-    canonicalExistingPath = await realpath(nearestExistingPath);
-  } catch {
+  const canonicalExistingPath = await tryRealpath(nearestExistingPath);
+  if (!canonicalExistingPath) {
     return undefined;
   }
 
