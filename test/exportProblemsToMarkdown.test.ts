@@ -117,7 +117,7 @@ type TestHost = {
 
 function createVscode(
   workspaceRoot: string,
-  configuredPath: string,
+  configuredPath: string | undefined,
   overrides: HostOverrides = {}
 ): TestHost {
   const writes: Write[] = [];
@@ -830,6 +830,20 @@ for (const { name, configuration, expectedHeadings } of headingHierarchyCases) {
     assert.deepEqual(headings, expectedHeadings);
   });
 }
+
+test('uses problems.md as the default save-dialog filename', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-default-file-name');
+  const host = createVscode(workspaceRoot, undefined, {
+    configuration: { outputMode: 'save-dialog', openAfterExport: false },
+    saveDialogResult: TestUri.file(path.join(workspaceRoot, 'selected.md')),
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.saveDialogs[0].defaultUri?.fsPath, path.join(workspaceRoot, 'problems.md'));
+});
 
 test('writes a target selected in the save dialog', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-selected-dialog');

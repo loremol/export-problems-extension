@@ -246,12 +246,12 @@ test('derives a portable workspace-local name for fallback save dialogs', () => 
     { configuredPath: '../../.bashrc', expected: '.bashrc' },
     { configuredPath: '..\\..\\profile.md', expected: 'profile.md' },
     { configuredPath: 'nested/report.md', expected: 'report.md' },
-    { configuredPath: '', expected: 'problems-export.md' },
-    { configuredPath: '../..', expected: 'problems-export.md' },
-    { configuredPath: 'CON', expected: 'problems-export.md' },
-    { configuredPath: 'report.md:stream', expected: 'problems-export.md' },
-    { configuredPath: 'report?.md', expected: 'problems-export.md' },
-    { configuredPath: 'report.md.', expected: 'problems-export.md' },
+    { configuredPath: '', expected: 'problems.md' },
+    { configuredPath: '../..', expected: 'problems.md' },
+    { configuredPath: 'CON', expected: 'problems.md' },
+    { configuredPath: 'report.md:stream', expected: 'problems.md' },
+    { configuredPath: 'report?.md', expected: 'problems.md' },
+    { configuredPath: 'report.md.', expected: 'problems.md' },
   ];
 
   for (const { configuredPath, expected } of cases) {

@@ -14,7 +14,7 @@ interface ExistingTargetPath {
   missingSegments: string[];
 }
 
-const defaultExportFileName = 'problems-export.md';
+const defaultExportFileName = 'problems.md';
 const invalidPortableFileNameCharacter = /[\u0000-\u001f<>:"/\\|?*]/;
 const windowsReservedFileName = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
 

@@ -71,7 +71,7 @@ function readOptions(): ExportOptions {
     includeProblemCount: config.get<boolean>('includeProblemCount', false),
     includeSource: config.get<boolean>('includeSource', true),
     includeColumn: config.get<boolean>('includeColumn', true),
-    defaultFileName: config.get<string>('defaultFileName', 'problems-export.md'),
+    defaultFileName: config.get<string>('defaultFileName', 'problems.md'),
     outputMode: config.get<ExportOptions['outputMode']>('outputMode', 'save-dialog'),
     openAfterExport: config.get<boolean>('openAfterExport', true),
   };

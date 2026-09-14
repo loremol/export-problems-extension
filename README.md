@@ -42,7 +42,7 @@ Example output produced:
 | `exportProblems.includeProblemCount` | boolean | `false` | Include the total problem and file count in the summary. |
 | `exportProblems.includeSource` | boolean | `true` | Include the `[eslint, no-unused-vars]` source/code tag. |
 | `exportProblems.includeColumn` | boolean | `true` | Include the column number (`Line 42:8` vs `Line 42`). |
-| `exportProblems.defaultFileName` | string | `problems-export.md` | File name or relative path pre-filled in the save dialog / used for `workspace-file` mode. |
+| `exportProblems.defaultFileName` | string | `problems.md` | File name or relative path pre-filled in the save dialog / used for `workspace-file` mode. |
 | `exportProblems.outputMode` | `save-dialog` \| `workspace-file` \| `clipboard` | `save-dialog` | Where output goes: native dialog, validated automatic write to a strict descendant of a local workspace, or the clipboard. Other `workspace-file` targets require save-dialog confirmation. |
 | `exportProblems.openAfterExport` | boolean | `true` | Open the exported file after writing (ignored for `clipboard`). |
 
