@@ -618,7 +618,11 @@ test('does not escape when a validated parent is replaced before writing', async
     }
     parentReplaced = true;
     await rename(reportsDirectory, originalReportsDirectory);
-    await symlink(outsideDirectory, reportsDirectory, 'dir');
+    await symlink(
+      outsideDirectory,
+      reportsDirectory,
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
   };
 
   const realOpen = fsPromises.open;
@@ -627,6 +631,14 @@ test('does not escape when a validated parent is replaced before writing', async
     'open',
     (async (...args: Parameters<typeof fsPromises.open>) => {
       const handle = await realOpen(...args);
+      if (process.platform === 'win32') {
+        // Windows locks the parent while this handle is open. Reopen the moved
+        // file to emulate the descriptor that POSIX keeps valid after rename.
+        await handle.close();
+        await replaceParent();
+        return realOpen(path.join(originalReportsDirectory, 'problems.md'), 'r+');
+      }
+
       await replaceParent();
       return handle;
     }) as typeof fsPromises.open
