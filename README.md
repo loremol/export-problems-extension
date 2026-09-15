@@ -32,19 +32,19 @@ Example output produced:
 ```
 
 ## Settings
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
-| `exportProblems.minimumSeverity` | `Hint` \| `Information` \| `Warning` \| `Error` | `Hint` | Minimum severity to include (`Hint` includes everything, `Error` includes only errors). |
-| `exportProblems.groupBy` | `file` \| `severity` \| `flat-table` | `file` | How diagnostics are organized (see below). |
-| `exportProblems.includeSummary` | boolean | `true` | Include the summary header block. |
-| `exportProblems.summaryTitle` | string | `Problems` | H1 title used when the summary is included. |
-| `exportProblems.includeExportDate` | boolean | `false` | Include the generation timestamp in the summary. |
-| `exportProblems.includeProblemCount` | boolean | `false` | Include the total problem and file count in the summary. |
-| `exportProblems.includeSource` | boolean | `true` | Include the `[eslint, no-unused-vars]` source/code tag. |
-| `exportProblems.includeColumn` | boolean | `true` | Include the column number (`Line 42:8` vs `Line 42`). |
-| `exportProblems.defaultFileName` | string | `problems.md` | File name or relative path pre-filled in the save dialog / used for `workspace-file` mode. |
-| `exportProblems.outputMode` | `save-dialog` \| `workspace-file` \| `clipboard` | `save-dialog` | Where output goes: native dialog, validated automatic write to a strict descendant of a local workspace, or the clipboard. Other `workspace-file` targets require save-dialog confirmation. |
-| `exportProblems.openAfterExport` | boolean | `true` | Open the exported file after writing (ignored for `clipboard`). |
+| Setting | Type | Default |
+| --- | --- | --- |
+| `exportProblems.minimumSeverity` | `Hint` \| `Information` \| `Warning` \| `Error` | `Hint` |
+| `exportProblems.groupBy` | `file` \| `severity` \| `flat-table` | `file` |
+| `exportProblems.includeSummary` | `boolean` | `true` |
+| `exportProblems.summaryTitle` | `string` | `Problems` |
+| `exportProblems.includeExportDate` | `boolean` | `false` |
+| `exportProblems.includeProblemCount` | `boolean` | `false` |
+| `exportProblems.includeSource` | `boolean` | `true` |
+| `exportProblems.includeColumn` | `boolean` | `true` |
+| `exportProblems.defaultFileName` | `string` | `problems.md` |
+| `exportProblems.outputMode` | `save-dialog` \| `workspace-file` \| `clipboard` | `save-dialog` |
+| `exportProblems.openAfterExport` | `boolean` | `true` |
 
 ### Grouping (`groupBy`)
 - `file`: one heading per file (`## <path>` by default beneath the summary, or `# <path>` when it is disabled).
@@ -57,9 +57,7 @@ Example output produced:
 ```
 
 ## Development
-| Command | Description |
-| --- | --- |
-| `npm ci` | Install the locked development dependencies. |
-| `npm run compile` | Compile the extension into `out/`. |
-| `npm test` | Compile and run the extension and security regression tests. |
-| `npm run package` | Build the VS Code extension package. |
+- `npm ci`
+- `npm run compile`
+- `npm test`
+- `npm run package`
