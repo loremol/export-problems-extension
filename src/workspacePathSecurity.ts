@@ -175,15 +175,26 @@ export async function resolveSafeWorkspaceTarget(
   );
 }
 
-const pathStateErrorCodes = new Set(['EEXIST', 'EISDIR', 'ELOOP', 'ENOENT', 'ENOTDIR']);
+const unusableTargetErrorCodes = new Set([
+  // The path changed shape during validation.
+  'EEXIST',
+  'EISDIR',
+  'ELOOP',
+  'ENOENT',
+  'ENOTDIR',
+  // The target or one of its parents denies writing.
+  'EACCES',
+  'EPERM',
+  'EROFS',
+]);
 
-// Returns true when an error can indicate that a path changed during validation
-function isPathStateError(error: unknown): boolean {
+// Returns true when an error means the target cannot be written and the caller should fall back
+function isUnusableTargetError(error: unknown): boolean {
   return (
     error instanceof Error &&
     'code' in error &&
     typeof error.code === 'string' &&
-    pathStateErrorCodes.has(error.code)
+    unusableTargetErrorCodes.has(error.code)
   );
 }
 
@@ -206,7 +217,7 @@ export async function writeFileToSafeWorkspaceTarget(
   try {
     await mkdir(path.dirname(initialTarget), { recursive: true });
   } catch (error) {
-    if (isPathStateError(error)) {
+    if (isUnusableTargetError(error)) {
       return undefined;
     }
     throw error;
@@ -222,7 +233,7 @@ export async function writeFileToSafeWorkspaceTarget(
   try {
     targetHandle = await open(targetPath, constants.O_WRONLY | noFollow);
   } catch (error) {
-    if (!isPathStateError(error)) {
+    if (!isUnusableTargetError(error)) {
       throw error;
     }
   }
@@ -243,7 +254,7 @@ export async function writeFileToSafeWorkspaceTarget(
         0o600
       );
     } catch (error) {
-      if (isPathStateError(error)) {
+      if (isUnusableTargetError(error)) {
         return undefined;
       }
       throw error;
@@ -260,7 +271,7 @@ export async function writeFileToSafeWorkspaceTarget(
     try {
       currentStat = await lstat(targetPath);
     } catch (error) {
-      if (isPathStateError(error)) {
+      if (isUnusableTargetError(error)) {
         return undefined;
       }
       throw error;

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fsPromises = require('node:fs/promises');
 import {
+  chmod,
   link,
   mkdir,
   mkdtemp,
@@ -1313,3 +1314,88 @@ for (const { groupBy, expected } of literalMarkdownCases) {
     assert.equal(host.getClipboardText(), expected);
   });
 }
+
+test('treats a null diagnostic code as an absent code', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-null-code');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      includeSummary: false,
+      outputMode: 'clipboard',
+    },
+    diagnostics: [{
+      severity: 0,
+      range: createRange(),
+      source: 'eslint',
+      // Diagnostics cross the extension-host boundary untyped, so a null code is reachable.
+      code: null as unknown as vscode.Diagnostic['code'],
+      message: 'Null code',
+    }],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    ['# source.ts', '', '- **Line 1:1** Error [eslint]: Null code', ''].join('\n')
+  );
+});
+
+test('falls back to the Hint threshold for inherited minimum-severity names', async () => {
+  for (const minimumSeverity of ['constructor', 'toString', 'valueOf', 'hasOwnProperty']) {
+    const workspaceRoot = path.join(tmpdir(), `export-problems-severity-${minimumSeverity}`);
+    const host = createVscode(workspaceRoot, 'problems.md', {
+      configuration: {
+        minimumSeverity: minimumSeverity as ExportConfiguration['minimumSeverity'],
+        includeSummary: false,
+        includeSource: false,
+        outputMode: 'clipboard',
+      },
+      diagnostics: [
+        { severity: 0, range: createRange(0), message: 'Error message' },
+        { severity: 3, range: createRange(1), message: 'Hint message' },
+      ],
+    });
+    const extension = loadExtension(host.vscode);
+    activateExtension(extension);
+
+    await host.getRegisteredCommand()();
+
+    assert.equal(
+      host.getClipboardText(),
+      [
+        '# source.ts',
+        '',
+        '- **Line 1:1** Error: Error message',
+        '- **Line 2:1** Hint: Hint message',
+        '',
+      ].join('\n'),
+      minimumSeverity
+    );
+  }
+});
+
+test('requires save confirmation instead of writing an unwritable workspace file', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-unwritable-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  if (process.getuid?.() === 0) {
+    t.skip('Permission bits do not restrict the superuser.');
+    return;
+  }
+
+  const targetPath = path.join(workspaceRoot, 'problems.md');
+  const sentinel = 'read-only export';
+  await writeFile(targetPath, sentinel);
+  await chmod(targetPath, 0o444);
+
+  const host = createVscode(workspaceRoot, 'problems.md');
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(await readFile(targetPath, 'utf8'), sentinel);
+  assert.equal(host.saveDialogs.length, 1);
+});

@@ -15,7 +15,7 @@ Export everything from the VS Code / VSCodium "Problems" panel to a Markdown fil
     3. copy to the clipboard
 - Filter by minimum severity, and toggle the header block, source/code tags, and column numbers.
 - Insecure paths submitted by the user are rejected and prompt a new save dialog
-- With multiple workspaces open in the same window, it adds folder headers
+- With multiple workspaces open in the same window, it includes workspace folder names in file paths
 
 See [Settings](#settings) for all options.
 

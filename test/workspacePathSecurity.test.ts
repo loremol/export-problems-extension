@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
@@ -8,6 +8,7 @@ import {
   isPathStrictlyWithin,
   resolveSafeWorkspaceTarget,
   selectWorkspaceFileTarget,
+  writeFileToSafeWorkspaceTarget,
 } from '../src/workspacePathSecurity';
 
 function isPermissionError(error: unknown): error is NodeJS.ErrnoException {
@@ -276,4 +277,55 @@ test('recognizes only strict descendants with POSIX and Windows path semantics',
     const actual = isPathStrictlyWithin(root, target, pathApi);
     assert.equal(actual, expected, `${target} within ${root}`);
   }
+});
+
+// Permission bits do not restrict a superuser, so the assertions below would be vacuous.
+function isSuperuser(): boolean {
+  return process.getuid?.() === 0;
+}
+
+test('declines an unwritable existing target instead of throwing', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  if (isSuperuser()) {
+    t.skip('Permission bits do not restrict the superuser.');
+    return;
+  }
+
+  const targetPath = path.join(workspaceRoot, 'problems.md');
+  const sentinel = 'read-only export';
+  await writeFile(targetPath, sentinel);
+  await chmod(targetPath, 0o444);
+
+  const actual = await writeFileToSafeWorkspaceTarget(
+    workspaceRoot,
+    'problems.md',
+    Buffer.from('replacement')
+  );
+
+  assert.equal(actual, undefined);
+  assert.equal(await readFile(targetPath, 'utf8'), sentinel);
+});
+
+test('declines a target inside an unwritable directory instead of throwing', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  if (process.platform === 'win32' || isSuperuser()) {
+    t.skip('Directory permission bits do not deny creation on this host.');
+    return;
+  }
+
+  const exportsDirectory = path.join(workspaceRoot, 'exports');
+  await mkdir(exportsDirectory);
+  await chmod(exportsDirectory, 0o555);
+
+  const actual = await writeFileToSafeWorkspaceTarget(
+    workspaceRoot,
+    path.join('exports', 'problems.md'),
+    Buffer.from('replacement')
+  );
+
+  assert.equal(actual, undefined);
 });
