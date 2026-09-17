@@ -4,14 +4,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-09-17
+
+### Added
+
+- Expand regression coverage for out-of-range diagnostic severities across every layout and the severity threshold, non-string settings, non-string diagnostic messages and sources, `null` diagnostic codes, save-dialog file name confinement, unwritable automatic targets, and the mode of a newly created export.
+
 ### Changed
 
 - Create new automatic `workspace-file` exports with the umask-derived mode of an ordinary file write instead of mode `0600`, so an export's permissions no longer depend on whether the file already existed.
+- Reduce the README settings and development tables to the setting names, types, and defaults, and describe multi-root exports as including workspace folder names in file paths rather than adding folder headings.
 
 ### Fixed
 
-- Label diagnostics whose severity falls outside the range VS Code declares as `Unknown severity` and group them in a trailing section, so the summary count and the exported body no longer disagree and `undefined` no longer reaches the output.
+- Label diagnostics whose severity falls outside the range VS Code declares as `Unknown severity` and group them in a trailing section, so the summary count and the exported body no longer disagree and `undefined` no longer reaches the output. Such a diagnostic is kept regardless of the configured minimum severity, since it cannot be ordered against the threshold.
 - Fall back to the declared default for a setting that is not a string, and stringify non-string diagnostic messages and sources, so such a value no longer aborts the whole export.
+- Fall back to the `Hint` threshold for an `exportProblems.minimumSeverity` name that is not one of the four declared severities, including names inherited from `Object.prototype`.
+- Treat a `null` diagnostic code as an absent code, as untyped providers can emit one where the API declares `undefined`.
+- Fall back to save-dialog confirmation when an automatic `workspace-file` target, or a directory on the way to it, denies writing, instead of failing the export with an error.
 - End the `flat-table` layout with a trailing newline, matching the `file` and `severity` layouts.
 
 ### Security
