@@ -251,7 +251,9 @@ export async function writeFileToSafeWorkspaceTarget(
       targetHandle = await open(
         targetPath,
         constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow,
-        0o600
+        // Leave the mode to the umask, matching both an ordinary file write and the mode an
+        // overwritten export keeps, so a report does not depend on whether the file already existed.
+        0o666
       );
     } catch (error) {
       if (isUnusableTargetError(error)) {

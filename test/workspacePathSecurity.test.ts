@@ -1,5 +1,15 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
@@ -328,4 +338,33 @@ test('declines a target inside an unwritable directory instead of throwing', asy
   );
 
   assert.equal(actual, undefined);
+});
+
+test('creates a workspace export with the same mode as an ordinary file write', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  if (process.platform === 'win32') {
+    t.skip('POSIX permission bits do not describe file access on this host.');
+    return;
+  }
+
+  // vscode.workspace.fs.writeFile leaves the mode to the umask on the save-dialog path, so an
+  // ordinary write is the reference the workspace-file path has to match.
+  const referencePath = path.join(workspaceRoot, 'reference.md');
+  await writeFile(referencePath, 'reference');
+  const referenceMode = (await stat(referencePath)).mode & 0o777;
+  if (referenceMode === 0o600) {
+    t.skip('This umask makes an owner-only export indistinguishable from an ordinary write.');
+    return;
+  }
+
+  const targetPath = await writeFileToSafeWorkspaceTarget(
+    workspaceRoot,
+    'problems.md',
+    Buffer.from('export')
+  );
+
+  assert.ok(targetPath);
+  assert.equal((await stat(targetPath)).mode & 0o777, referenceMode);
 });

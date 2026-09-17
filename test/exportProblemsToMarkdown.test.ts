@@ -417,7 +417,7 @@ test('tests every minimum-severity boundary', async () => {
 
     const includedMessages = host.getClipboardText()
       ?.split('\n')
-      .slice(2)
+      .slice(2, -1)
       .map((row) => row.split(' | ')[3].replace(/ \|$/, ''));
     assert.deepEqual(includedMessages, expectedMessages, minimumSeverity);
   }
@@ -566,6 +566,7 @@ test('honors includeSource=false and includeColumn=false in every layout', async
       '| Severity | File | Line | Message |',
       '| --- | --- | --- | --- |',
       '| Error | source.ts | 5 | Configured diagnostic |',
+      '',
     ].join('\n'),
   };
 
@@ -1290,6 +1291,7 @@ const literalMarkdownCases: ReadonlyArray<{
       '| Severity | File | Line | Source | Message |',
       '| --- | --- | --- | --- | --- |',
       "| Error | src/ ## fake <img>& [path](url) \\| file.ts | 1:1 | lint](url) <b>&, ![code](url)\\| | first - forged <script attr=\"x\" other='y'> **bold** `code` [link](url) ![img](url) \\| https://evil.test &copy; |",
+      '',
     ].join('\n'),
   },
 ];
@@ -1398,4 +1400,240 @@ test('requires save confirmation instead of writing an unwritable workspace file
 
   assert.equal(await readFile(targetPath, 'utf8'), sentinel);
   assert.equal(host.saveDialogs.length, 1);
+});
+
+test('confines an escaping defaultFileName to the workspace in the save dialog', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-escaping-dialog-name');
+  const host = createVscode(workspaceRoot, path.join('..', '..', '..', '.bashrc'), {
+    configuration: { outputMode: 'save-dialog', openAfterExport: false },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.saveDialogs[0].defaultUri?.fsPath, path.join(workspaceRoot, '.bashrc'));
+});
+
+test('falls back to the declared default for a non-string summary title', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-nonstring-title');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      // VS Code does not coerce settings to their declared type at read time.
+      summaryTitle: 42 as unknown as string,
+      outputMode: 'clipboard',
+    },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    [
+      '# Problems',
+      '',
+      '## source.ts',
+      '',
+      '- **Line 1:1** Error: Example problem',
+      '',
+    ].join('\n')
+  );
+});
+
+test('falls back to the declared default for a non-string defaultFileName', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-nonstring-file-name');
+  const host = createVscode(workspaceRoot, 42 as unknown as string, {
+    configuration: { outputMode: 'save-dialog', openAfterExport: false },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.saveDialogs[0].defaultUri?.fsPath, path.join(workspaceRoot, 'problems.md'));
+});
+
+test('stringifies non-string diagnostic messages and sources', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-nonstring-diagnostic');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      includeSummary: false,
+      outputMode: 'clipboard',
+    },
+    diagnostics: [{
+      severity: 0,
+      range: createRange(),
+      // Diagnostics cross the extension-host boundary untyped, so non-strings are reachable.
+      source: 7 as unknown as string,
+      message: 42 as unknown as string,
+    }],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    ['# source.ts', '', '- **Line 1:1** Error [7]: 42', ''].join('\n')
+  );
+});
+
+// DiagnosticSeverity is a TypeScript enum, so other extensions can emit values outside 0-3.
+const unknownSeverityDiagnostics: vscode.Diagnostic[] = [
+  { severity: 0, range: createRange(0), message: 'normal' },
+  {
+    severity: -1 as vscode.Diagnostic['severity'],
+    range: createRange(1),
+    message: 'weird',
+  },
+];
+
+test('labels an out-of-range severity and still counts it once', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-unknown-severity-file');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      includeProblemCount: true,
+      outputMode: 'clipboard',
+    },
+    diagnostics: unknownSeverityDiagnostics,
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    [
+      '# Problems',
+      '',
+      'Total problems: 2 across 1 file(s)',
+      '',
+      '## source.ts',
+      '',
+      '- **Line 1:1** Error: normal',
+      '- **Line 2:1** Unknown severity: weird',
+      '',
+    ].join('\n')
+  );
+});
+
+test('groups out-of-range severities last in the severity layout', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-unknown-severity-group');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      groupBy: 'severity',
+      includeSummary: false,
+      outputMode: 'clipboard',
+    },
+    diagnostics: unknownSeverityDiagnostics,
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    [
+      '# Errors',
+      '',
+      '- **source.ts:1:1**: normal',
+      '',
+      '# Unknown severities',
+      '',
+      '- **source.ts:2:1**: weird',
+      '',
+    ].join('\n')
+  );
+});
+
+test('labels an out-of-range severity in the flat-table layout', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-unknown-severity-table');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      groupBy: 'flat-table',
+      includeSummary: false,
+      includeSource: false,
+      outputMode: 'clipboard',
+    },
+    diagnostics: unknownSeverityDiagnostics,
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    [
+      '| Severity | File | Line | Message |',
+      '| --- | --- | --- | --- |',
+      '| Error | source.ts | 1:1 | normal |',
+      '| Unknown severity | source.ts | 2:1 | weird |',
+      '',
+    ].join('\n')
+  );
+});
+
+test('keeps out-of-range severities regardless of the minimum severity threshold', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-unknown-severity-threshold');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'Error',
+      includeSummary: false,
+      outputMode: 'clipboard',
+    },
+    diagnostics: [
+      { severity: 1, range: createRange(0), message: 'filtered warning' },
+      {
+        severity: 4 as vscode.Diagnostic['severity'],
+        range: createRange(1),
+        message: 'above the known range',
+      },
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    [
+      '# source.ts',
+      '',
+      '- **Line 2:1** Unknown severity: above the known range',
+      '',
+    ].join('\n')
+  );
+});
+
+test('ends the flat-table layout with a trailing newline like the other layouts', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-table-trailing-newline');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      groupBy: 'flat-table',
+      includeSummary: false,
+      includeSource: false,
+      outputMode: 'clipboard',
+    },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(
+    host.getClipboardText(),
+    [
+      '| Severity | File | Line | Message |',
+      '| --- | --- | --- | --- |',
+      '| Error | source.ts | 1:1 | Example problem |',
+      '',
+    ].join('\n')
+  );
 });

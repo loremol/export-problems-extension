@@ -26,6 +26,36 @@ const severityOrder: vscode.DiagnosticSeverity[] = [
   vscode.DiagnosticSeverity.Hint,
 ];
 
+// DiagnosticSeverity is a TypeScript enum, so it constrains nothing at runtime and diagnostics
+// reaching us from other extensions can carry a severity outside the four declared values.
+const unknownSeverityLabel = 'Unknown severity';
+const unknownSeverityHeading = 'Unknown severities';
+
+// Returns true when a severity is one of the four values VS Code declares
+function isKnownSeverity(severity: vscode.DiagnosticSeverity): boolean {
+  return severityOrder.includes(severity);
+}
+
+// Names a severity, falling back to a shared label for values outside the declared range
+function formatSeverityLabel(severity: vscode.DiagnosticSeverity): string {
+  return isKnownSeverity(severity) ? severityLabels[severity] : unknownSeverityLabel;
+}
+
+// Orders the severity layout's sections, collecting unrecognized severities in a trailing one
+const severitySections: ReadonlyArray<{
+  heading: string;
+  includesSeverity: (severity: vscode.DiagnosticSeverity) => boolean;
+}> = [
+  ...severityOrder.map((sectionSeverity) => ({
+    heading: severityHeadings[sectionSeverity],
+    includesSeverity: (severity: vscode.DiagnosticSeverity) => severity === sectionSeverity,
+  })),
+  {
+    heading: unknownSeverityHeading,
+    includesSeverity: (severity: vscode.DiagnosticSeverity) => !isKnownSeverity(severity),
+  },
+];
+
 const severityThresholds: Record<string, vscode.DiagnosticSeverity> = {
   Error: vscode.DiagnosticSeverity.Error,
   Warning: vscode.DiagnosticSeverity.Warning,
@@ -65,21 +95,32 @@ type OutputTarget =
     }
   | { kind: 'selected'; uri: vscode.Uri };
 
+// Reads a string setting, falling back to its default when the stored value is not a string
+function readStringSetting<T extends string>(
+  config: vscode.WorkspaceConfiguration,
+  section: string,
+  defaultValue: T
+): T {
+  // VS Code stores settings verbatim, so a declared "string" can still read back as any JSON value.
+  const value = config.get<unknown>(section, defaultValue);
+  return typeof value === 'string' ? (value as T) : defaultValue;
+}
+
 // Reads the configured export options
 function readOptions(): ExportOptions {
   const config = vscode.workspace.getConfiguration('exportProblems');
-  const minimumSeverityName = config.get<string>('minimumSeverity', 'Hint');
+  const minimumSeverityName = readStringSetting(config, 'minimumSeverity', 'Hint');
   return {
     threshold: readSeverityThreshold(minimumSeverityName),
-    groupBy: config.get<ExportOptions['groupBy']>('groupBy', 'file'),
+    groupBy: readStringSetting<ExportOptions['groupBy']>(config, 'groupBy', 'file'),
     includeSummary: config.get<boolean>('includeSummary', true),
-    summaryTitle: config.get<string>('summaryTitle', 'Problems'),
+    summaryTitle: readStringSetting(config, 'summaryTitle', 'Problems'),
     includeExportDate: config.get<boolean>('includeExportDate', false),
     includeProblemCount: config.get<boolean>('includeProblemCount', false),
     includeSource: config.get<boolean>('includeSource', true),
     includeColumn: config.get<boolean>('includeColumn', true),
-    defaultFileName: config.get<string>('defaultFileName', 'problems.md'),
-    outputMode: config.get<ExportOptions['outputMode']>('outputMode', 'save-dialog'),
+    defaultFileName: readStringSetting(config, 'defaultFileName', 'problems.md'),
+    outputMode: readStringSetting<ExportOptions['outputMode']>(config, 'outputMode', 'save-dialog'),
     openAfterExport: config.get<boolean>('openAfterExport', true),
   };
 }
@@ -99,7 +140,12 @@ function collectDiagnosticEntries(
     .map(([uri, diagnostics]): DiagnosticEntry => [
       uri,
       diagnostics
-        .filter((diagnostic) => diagnostic.severity <= threshold)
+        // An unrecognized severity cannot be ordered against the threshold, so it is always kept
+        // rather than being dropped or retained depending on which side of the range it falls on.
+        .filter(
+          (diagnostic) =>
+            !isKnownSeverity(diagnostic.severity) || diagnostic.severity <= threshold
+        )
         .sort(
           (left, right) =>
             left.range.start.line - right.range.start.line ||
@@ -202,7 +248,7 @@ async function selectOutputTarget(options: ExportOptions): Promise<OutputTarget 
   }
 
   const defaultUri = workspaceFolder
-    ? vscode.Uri.joinPath(workspaceFolder.uri, options.defaultFileName)
+    ? vscode.Uri.joinPath(workspaceFolder.uri, getSafeDialogFileName(options.defaultFileName))
     : undefined;
   const selectedUri = await showMarkdownSaveDialog(defaultUri);
   return selectedUri ? { kind: 'selected', uri: selectedUri } : undefined;
@@ -300,9 +346,10 @@ function buildByFile(
     lines.push(formatGroupHeading(path, options.includeSummary), '');
     for (const diagnostic of diagnostics) {
       const loc = formatLocation(diagnostic, options.includeColumn);
-      const label = severityLabels[diagnostic.severity];
+      const label = formatSeverityLabel(diagnostic.severity);
       const tag = formatSourceTag(diagnostic, options.includeSource);
-      lines.push(`- **Line ${loc}** ${label}${tag}: ${formatInlineText(diagnostic.message)}`);
+      const message = formatInlineText(toText(diagnostic.message));
+      lines.push(`- **Line ${loc}** ${label}${tag}: ${message}`);
     }
     lines.push('');
   }
@@ -316,12 +363,12 @@ function buildBySeverity(
   options: ExportOptions
 ): string[] {
   const lines: string[] = [];
-  for (const severity of severityOrder) {
+  for (const { heading, includesSeverity } of severitySections) {
     const items: { path: string; diagnostic: vscode.Diagnostic }[] = [];
     for (const [uri, diagnostics] of entries) {
       const path = vscode.workspace.asRelativePath(uri, includeWorkspaceFolderName);
       for (const diagnostic of diagnostics) {
-        if (diagnostic.severity === severity) {
+        if (includesSeverity(diagnostic.severity)) {
           items.push({ path, diagnostic });
         }
       }
@@ -335,13 +382,12 @@ function buildBySeverity(
         a.diagnostic.range.start.line - b.diagnostic.range.start.line ||
         a.diagnostic.range.start.character - b.diagnostic.range.start.character
     );
-    lines.push(formatGroupHeading(severityHeadings[severity], options.includeSummary), '');
+    lines.push(formatGroupHeading(heading, options.includeSummary), '');
     for (const { path, diagnostic } of items) {
       const loc = formatLocation(diagnostic, options.includeColumn);
       const tag = formatSourceTag(diagnostic, options.includeSource);
-      lines.push(
-        `- **${formatInlineText(path)}:${loc}**${tag}: ${formatInlineText(diagnostic.message)}`
-      );
+      const message = formatInlineText(toText(diagnostic.message));
+      lines.push(`- **${formatInlineText(path)}:${loc}**${tag}: ${message}`);
     }
     lines.push('');
   }
@@ -369,18 +415,19 @@ function buildFlatTable(
     const path = formatTableCell(vscode.workspace.asRelativePath(uri, includeWorkspaceFolderName));
     for (const diagnostic of diagnostics) {
       const cells = [
-        severityLabels[diagnostic.severity],
+        formatSeverityLabel(diagnostic.severity),
         path,
         formatLocation(diagnostic, options.includeColumn),
       ];
       if (options.includeSource) {
         cells.push(formatSourceAndCode(diagnostic, formatTableCell));
       }
-      cells.push(formatTableCell(diagnostic.message));
+      cells.push(formatTableCell(toText(diagnostic.message)));
       lines.push(`| ${cells.join(' | ')} |`);
     }
   }
 
+  lines.push('');
   return lines;
 }
 
@@ -401,7 +448,7 @@ function formatSourceAndCode(
 ): string {
   const parts: string[] = [];
   if (diagnostic.source) {
-    parts.push(escapeText(diagnostic.source));
+    parts.push(escapeText(toText(diagnostic.source)));
   }
   const code = formatCode(diagnostic.code);
   if (code) {
@@ -430,6 +477,11 @@ function formatTableCell(value: string): string {
     /(\\*)\|/g,
     (_match, backslashes: string) => `${backslashes.repeat(2)}\\|`
   );
+}
+
+// Normalizes untyped diagnostic text, since diagnostics come from other extensions and could be incorrectly typed
+function toText(value: unknown): string {
+  return String(value);
 }
 
 // Normalizes a diagnostic code to text, tolerating the null untyped providers can emit

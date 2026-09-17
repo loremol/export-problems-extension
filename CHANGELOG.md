@@ -4,6 +4,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Create new automatic `workspace-file` exports with the umask-derived mode of an ordinary file write instead of mode `0600`, so an export's permissions no longer depend on whether the file already existed.
+
+### Fixed
+
+- Label diagnostics whose severity falls outside the range VS Code declares as `Unknown severity` and group them in a trailing section, so the summary count and the exported body no longer disagree and `undefined` no longer reaches the output.
+- Fall back to the declared default for a setting that is not a string, and stringify non-string diagnostic messages and sources, so such a value no longer aborts the whole export.
+- End the `flat-table` layout with a trailing newline, matching the `file` and `severity` layouts.
+
+### Security
+
+- Sanitize `exportProblems.defaultFileName` before it pre-fills the save dialog in the default `save-dialog` output mode, so a workspace setting can no longer aim the dialog outside the workspace folder.
+
 ## [1.1.2] - 2026-09-14
 
 ### Changed
