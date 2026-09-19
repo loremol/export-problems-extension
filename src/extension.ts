@@ -13,7 +13,7 @@ async function runExportCommand(): Promise<void> {
   }
 }
 
-// Registers the export command with the extension host.
+// Registers the export command with the extension host
 export function activate(
   context: Pick<vscode.ExtensionContext, 'subscriptions'>
 ): void {
@@ -22,5 +22,5 @@ export function activate(
   );
 }
 
-// Provides the extension host's optional deactivation hook.
+// Provides the extension host's optional deactivation hook
 export function deactivate(): void { }
