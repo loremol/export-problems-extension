@@ -4,6 +4,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Exclude the automatic `workspace-file` export target from the diagnostics it collects, so a linter's complaints about a previous export no longer appear in the next one.
+
 ## [1.1.3] - 2026-09-17
 
 ### Added

@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   getSafeDialogFileName,
@@ -130,13 +131,41 @@ function hasMultipleWorkspaceFolders(): boolean {
   return (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
 }
 
+// Resolves the file an automatic workspace export writes, so a report never includes itself
+function resolveExportTargetPath(options: ExportOptions): string | undefined {
+  if (options.outputMode !== 'workspace-file') {
+    return undefined;
+  }
+
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder || workspaceFolder.uri.scheme !== 'file') {
+    return undefined;
+  }
+
+  return path.resolve(workspaceFolder.uri.fsPath, options.defaultFileName);
+}
+
+// Returns true when a diagnostic's file is the export's own output file
+function isExportTargetUri(
+  uri: vscode.Uri,
+  exportTargetPath: string | undefined
+): boolean {
+  return (
+    exportTargetPath !== undefined &&
+    uri.scheme === 'file' &&
+    path.resolve(uri.fsPath) === exportTargetPath
+  );
+}
+
 // Collects matching diagnostics in stable path and position order
 function collectDiagnosticEntries(
   threshold: vscode.DiagnosticSeverity,
-  includeWorkspaceFolderName: boolean
+  includeWorkspaceFolderName: boolean,
+  exportTargetPath: string | undefined
 ): DiagnosticEntry[] {
   return vscode.languages
     .getDiagnostics()
+    .filter(([uri]) => !isExportTargetUri(uri, exportTargetPath))
     .map(([uri, diagnostics]): DiagnosticEntry => [
       uri,
       diagnostics
@@ -164,7 +193,12 @@ function collectDiagnosticEntries(
 export async function exportProblemsToMarkdown(): Promise<void> {
   const options = readOptions();
   const includeWorkspaceFolderName = hasMultipleWorkspaceFolders();
-  const entries = collectDiagnosticEntries(options.threshold, includeWorkspaceFolderName);
+  const exportTargetPath = resolveExportTargetPath(options);
+  const entries = collectDiagnosticEntries(
+    options.threshold,
+    includeWorkspaceFolderName,
+    exportTargetPath
+  );
 
   if (entries.length === 0) {
     vscode.window.showInformationMessage('No problems found in workspace.');

@@ -1637,3 +1637,53 @@ test('ends the flat-table layout with a trailing newline like the other layouts'
     ].join('\n')
   );
 });
+
+test('excludes the export file itself from an automatic workspace export', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-self-exclusion-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { includeSummary: false },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'problems.md')), [{
+        severity: 1,
+        range: createRange(),
+        message: 'Stale problem from the previous export',
+      }]],
+      [TestUri.file(path.join(workspaceRoot, 'source.ts')), [{
+        severity: 0,
+        range: createRange(),
+        message: 'Real problem',
+      }]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const written = await readFile(path.join(workspaceRoot, 'problems.md'), 'utf8');
+  assert.ok(written.includes('Real problem'));
+  assert.ok(!written.includes('Stale problem from the previous export'));
+  assert.ok(!written.includes('# problems.md'));
+});
+
+test('keeps the export file name in the report when writing elsewhere', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-clipboard-keeps-target');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { includeSummary: false, outputMode: 'clipboard' },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'problems.md')), [{
+        severity: 1,
+        range: createRange(),
+        message: 'Markdown problem',
+      }]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.ok(host.getClipboardText()?.includes('Markdown problem'));
+});
