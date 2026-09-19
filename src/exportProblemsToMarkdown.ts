@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { runExportStep } from './exportErrors';
 import {
   getSafeDialogFileName,
   resolveSafeWorkspaceTarget,
@@ -297,7 +298,9 @@ async function deliverMarkdown(
   hiddenNotice: string
 ): Promise<void> {
   if (options.outputMode === 'clipboard') {
-    await vscode.env.clipboard.writeText(content);
+    await runExportStep('copy the export to the clipboard', () =>
+      vscode.env.clipboard.writeText(content)
+    );
     vscode.window.showInformationMessage(
       appendHiddenNotice('Problems exported to clipboard.', hiddenNotice)
     );
@@ -314,10 +317,14 @@ async function deliverMarkdown(
     return;
   }
 
-  const writtenPath = await writeFileToSafeWorkspaceTarget(
-    target.workspacePath,
-    target.configuredPath,
-    Buffer.from(content, 'utf8')
+  const writtenPath = await runExportStep(
+    `write the export to ${target.configuredPath}`,
+    () =>
+      writeFileToSafeWorkspaceTarget(
+        target.workspacePath,
+        target.configuredPath,
+        Buffer.from(content, 'utf8')
+      )
   );
   if (writtenPath) {
     await completeMarkdownFileExport(
@@ -379,12 +386,14 @@ async function selectOutputTarget(options: ExportOptions): Promise<OutputTarget 
 // Opens the Markdown export save dialog
 function showMarkdownSaveDialog(
   defaultUri?: vscode.Uri
-): Thenable<vscode.Uri | undefined> {
-  return vscode.window.showSaveDialog({
-    defaultUri,
-    filters: { Markdown: ['md'] },
-    saveLabel: 'Export Problems',
-  });
+): Promise<vscode.Uri | undefined> {
+  return runExportStep('open the save dialog', () =>
+    vscode.window.showSaveDialog({
+      defaultUri,
+      filters: { Markdown: ['md'] },
+      saveLabel: 'Export Problems',
+    })
+  );
 }
 
 // Joins a completion message to a hidden-diagnostics notice, omitting an empty one
@@ -399,7 +408,10 @@ async function writeMarkdownFile(
   openAfterExport: boolean,
   hiddenNotice: string
 ): Promise<void> {
-  await vscode.workspace.fs.writeFile(targetUri, Buffer.from(content, 'utf8'));
+  await runExportStep(
+    `write the export to ${vscode.workspace.asRelativePath(targetUri)}`,
+    () => vscode.workspace.fs.writeFile(targetUri, Buffer.from(content, 'utf8'))
+  );
   await completeMarkdownFileExport(targetUri, openAfterExport, hiddenNotice);
 }
 

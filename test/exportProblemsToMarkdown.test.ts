@@ -914,7 +914,7 @@ test('reports clipboard write failures without reporting success', async (t) => 
   await host.getRegisteredCommand()();
 
   assert.deepEqual(host.errorMessages, [
-    'Export Problems to Markdown failed: Clipboard write failed.',
+    'Could not copy the export to the clipboard: Clipboard write failed.',
   ]);
   assert.deepEqual(host.informationMessages, []);
 });
@@ -937,7 +937,7 @@ test('reports file write failures without reporting success', async (t) => {
   await host.getRegisteredCommand()();
 
   assert.deepEqual(host.errorMessages, [
-    'Export Problems to Markdown failed: File write failed.',
+    'Could not write the export to problems.md: File write failed.',
   ]);
   assert.deepEqual(host.informationMessages, []);
 });
@@ -2015,4 +2015,68 @@ test('logs the original failure for the Extension Host log', async (t) => {
 
   assert.equal(loggedArguments.length, 1);
   assert.ok(loggedArguments[0].includes(cause));
+});
+
+test('names the clipboard when the clipboard cannot be written', async (t) => {
+  silenceConsoleErrors(t);
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-clipboard-failure');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { outputMode: 'clipboard' },
+  });
+  host.vscode.env.clipboard.writeText = async () => {
+    throw new Error('the clipboard is unavailable');
+  };
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.errorMessages, [
+    'Could not copy the export to the clipboard: the clipboard is unavailable.',
+  ]);
+  assert.deepEqual(host.informationMessages, []);
+});
+
+test('names the save dialog when it cannot be opened', async (t) => {
+  silenceConsoleErrors(t);
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-dialog-failure');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { outputMode: 'save-dialog' },
+  });
+  host.vscode.window.showSaveDialog = async () => {
+    throw new Error('dialog host unavailable');
+  };
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.errorMessages, [
+    'Could not open the save dialog: dialog host unavailable.',
+  ]);
+  assert.equal(host.writes.length, 0);
+});
+
+test('names the target file when a selected destination cannot be written', async (t) => {
+  silenceConsoleErrors(t);
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-write-failure');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { outputMode: 'save-dialog' },
+    saveDialogResult: TestUri.file(path.join(workspaceRoot, 'reports', 'problems.md')),
+  });
+  host.vscode.workspace.fs.writeFile = async () => {
+    // VS Code's FileSystemError carries its code only as a property.
+    throw Object.assign(new Error('Unable to write file'), { code: 'NoPermissions' });
+  };
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.errorMessages, [
+    `Could not write the export to ${path.join('reports', 'problems.md')}: `
+      + 'Unable to write file (NoPermissions).',
+  ]);
+  assert.deepEqual(host.informationMessages, []);
+  assert.equal(host.openedDocuments.length, 0);
 });

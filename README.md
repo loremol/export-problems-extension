@@ -51,6 +51,12 @@ Example output produced:
 - `severity`: one heading per severity (`## Errors` by default beneath the summary, or `# Errors` when it is disabled), with the file path in each entry.
 - `flat-table`: a single Markdown table, one row per diagnostic.
 
+## When an export fails
+- A failure names the step it stopped at and the reason given — for example
+  `Could not write the export to reports/problems.md: Unable to write file (NoPermissions).`
+  The full error, stack included, is in the Extension Host log
+  (**Help → Toggle Developer Tools → Console**).
+
 ## Development
 - `npm ci`
 - `npm run compile`

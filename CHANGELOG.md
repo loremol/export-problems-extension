@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Name the delivery step in a failed export's notification — copying to the clipboard, opening the save dialog, or writing to a named file — so a failure says which destination it could not reach.
 - Confirm a completed export in every output mode. Enabling `openAfterExport` previously opened the report and showed no notification at all, so the same export reported different amounts depending on its mode, and the excluded-diagnostics count went unreported in the default configuration. The confirmation message and everything appended to it no longer depend on the output mode.
 
 ### Fixed
