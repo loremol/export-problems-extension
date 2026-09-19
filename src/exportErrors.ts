@@ -11,12 +11,18 @@ function hasErrorCode(error: unknown): error is { code: string } {
   );
 }
 
-// Fits cause text into a single readable notification line
-function formatCauseText(value: string): string {
-  const singleLine = value.replace(/[\r\n]+/g, ' ').trim();
-  return singleLine.length > maximumCauseLength
-    ? `${singleLine.slice(0, maximumCauseLength - 1)}…`
-    : singleLine;
+// Fits cause text and its code suffix into a single readable notification line
+function formatCauseText(value: string, suffix = ''): string {
+  const combined = `${value}${suffix}`;
+  if (combined.length <= maximumCauseLength) {
+    return combined;
+  }
+
+  if (suffix.length >= maximumCauseLength) {
+    return `${combined.slice(0, maximumCauseLength - 1)}…`;
+  }
+
+  return `${value.slice(0, maximumCauseLength - suffix.length - 1)}…${suffix}`;
 }
 
 // Ends a sentence, leaving text that already ends in terminal punctuation alone
@@ -27,14 +33,17 @@ export function endSentence(text: string): string {
 // Names the cause of a failure in a form worth showing in a notification
 export function describeError(error: unknown): string {
   const code = hasErrorCode(error) ? error.code : '';
-  const message = formatCauseText(error instanceof Error ? error.message : String(error));
+  const message = (error instanceof Error ? error.message : String(error))
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
 
   if (!message) {
-    return code || 'unknown error';
+    return formatCauseText(code || 'unknown error');
   }
 
   // Node's errno messages begin with their own code, so repeating it adds nothing.
-  return code && !message.includes(code) ? `${message} (${code})` : message;
+  const codeSuffix = code && !message.includes(code) ? ` (${code})` : '';
+  return formatCauseText(message, codeSuffix);
 }
 
 // Marks a failure that already names the export step it interrupted

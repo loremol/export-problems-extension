@@ -48,6 +48,14 @@ test('abbreviates a cause too long for a notification', () => {
   assert.ok(described.endsWith('…'));
 });
 
+test('keeps an appended error code within the cause length limit', () => {
+  const error = Object.assign(new Error('x'.repeat(400)), { code: 'NoPermissions' });
+  const described = describeError(error);
+
+  assert.equal(described.length, 300);
+  assert.ok(described.endsWith('… (NoPermissions)'));
+});
+
 test('describes a thrown non-error value', () => {
   assert.equal(describeError('the clipboard is unavailable'), 'the clipboard is unavailable');
 });
