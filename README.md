@@ -56,6 +56,8 @@ Example output produced:
   `Could not write the export to reports/problems.md: Unable to write file (NoPermissions).`
   The full error, stack included, is in the Extension Host log
   (**Help → Toggle Developer Tools → Console**).
+- If the report is written but cannot be opened, the export is still confirmed and the file is on
+  disk — the confirmation becomes a warning that says why it could not be opened.
 
 ## Development
 - `npm ci`

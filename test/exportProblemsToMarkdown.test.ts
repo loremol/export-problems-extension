@@ -54,6 +54,7 @@ type VscodeApi = {
     showSaveDialog(options?: vscode.SaveDialogOptions): Thenable<vscode.Uri | undefined>;
     showErrorMessage(message: string): Thenable<string | undefined>;
     showInformationMessage(message: string): Thenable<string | undefined>;
+    showWarningMessage(message: string): Thenable<string | undefined>;
     showTextDocument(document: vscode.TextDocument): Thenable<vscode.TextEditor>;
   };
   workspace: {
@@ -110,6 +111,7 @@ type TestHost = {
   saveDialogs: vscode.SaveDialogOptions[];
   errorMessages: string[];
   informationMessages: string[];
+  warningMessages: string[];
   openedDocuments: vscode.Uri[];
   shownDocuments: vscode.Uri[];
   getRegisteredCommand(): () => unknown;
@@ -125,6 +127,7 @@ function createVscode(
   const saveDialogs: vscode.SaveDialogOptions[] = [];
   const errorMessages: string[] = [];
   const informationMessages: string[] = [];
+  const warningMessages: string[] = [];
   const openedDocuments: vscode.Uri[] = [];
   const shownDocuments: vscode.Uri[] = [];
   const diagnostics: vscode.Diagnostic[] = overrides.diagnostics ?? [{
@@ -177,6 +180,10 @@ function createVscode(
       },
       async showInformationMessage(message) {
         informationMessages.push(message);
+        return undefined;
+      },
+      async showWarningMessage(message) {
+        warningMessages.push(message);
         return undefined;
       },
       async showTextDocument(document): Promise<vscode.TextEditor> {
@@ -233,6 +240,7 @@ function createVscode(
     saveDialogs,
     errorMessages,
     informationMessages,
+    warningMessages,
     openedDocuments,
     shownDocuments,
     getRegisteredCommand() {
@@ -1128,27 +1136,28 @@ test('opens the exported workspace file when configured', async (t) => {
   assert.deepEqual(host.informationMessages, ['Problems exported to problems.md.']);
 });
 
-test('reports document opening failures without reporting success', async (t) => {
+test('confirms an export whose report cannot be opened', async (t) => {
   silenceConsoleErrors(t);
-  const workspaceRoot = path.join(tmpdir(), 'export-problems-document-open-failure');
-  const selectedUri = TestUri.file(path.join(workspaceRoot, 'problems.md'));
-  const failure = new Error('Document opening failed');
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-open-failure');
   const host = createVscode(workspaceRoot, 'problems.md', {
-    configuration: { outputMode: 'save-dialog', openAfterExport: true },
-    saveDialogResult: selectedUri,
+    configuration: { openAfterExport: true, outputMode: 'save-dialog' },
+    saveDialogResult: TestUri.file(path.join(workspaceRoot, 'problems.md')),
   });
   host.vscode.workspace.openTextDocument = async () => {
-    throw failure;
+    throw new Error('File seems to be binary and cannot be opened as text');
   };
   const extension = loadExtension(host.vscode);
   activateExtension(extension);
 
   await host.getRegisteredCommand()();
 
-  assert.deepEqual(host.errorMessages, [
-    'Export Problems to Markdown failed: Document opening failed.',
-  ]);
+  assert.equal(host.writes.length, 1);
+  assert.deepEqual(host.errorMessages, []);
   assert.deepEqual(host.informationMessages, []);
+  assert.deepEqual(host.warningMessages, [
+    'Problems exported to problems.md. The exported file could not be opened: '
+      + 'File seems to be binary and cannot be opened as text.',
+  ]);
 });
 
 test('requires save confirmation instead of writing an escaping workspace target', async (t) => {

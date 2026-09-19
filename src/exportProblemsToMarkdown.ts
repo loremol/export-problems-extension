@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { runExportStep } from './exportErrors';
+import { describeError, endSentence, runExportStep } from './exportErrors';
 import {
   getSafeDialogFileName,
   resolveSafeWorkspaceTarget,
@@ -415,23 +415,37 @@ async function writeMarkdownFile(
   await completeMarkdownFileExport(targetUri, openAfterExport, hiddenNotice);
 }
 
+// Opens a written export, returning a notice when it cannot be shown
+async function tryOpenExport(targetUri: vscode.Uri): Promise<string> {
+  try {
+    const document = await vscode.workspace.openTextDocument(targetUri);
+    await vscode.window.showTextDocument(document);
+    return '';
+  } catch (error) {
+    // The report is already on disk, so failing to open it does not fail the export.
+    console.error('The exported file could not be opened', error);
+    return endSentence(`The exported file could not be opened: ${describeError(error)}`);
+  }
+}
+
 // Reports a completed file export, opening it first when configured
 async function completeMarkdownFileExport(
   targetUri: vscode.Uri,
   openAfterExport: boolean,
   hiddenNotice: string
 ): Promise<void> {
-  if (openAfterExport) {
-    const document = await vscode.workspace.openTextDocument(targetUri);
-    await vscode.window.showTextDocument(document);
+  const openNotice = openAfterExport ? await tryOpenExport(targetUri) : '';
+  const message = appendHiddenNotice(
+    `Problems exported to ${vscode.workspace.asRelativePath(targetUri)}.`,
+    hiddenNotice
+  );
+
+  if (openNotice) {
+    vscode.window.showWarningMessage(`${message} ${openNotice}`);
+    return;
   }
 
-  vscode.window.showInformationMessage(
-    appendHiddenNotice(
-      `Problems exported to ${vscode.workspace.asRelativePath(targetUri)}.`,
-      hiddenNotice
-    )
-  );
+  vscode.window.showInformationMessage(message);
 }
 
 // Builds the complete Markdown export by choosing the right strategy based on options
