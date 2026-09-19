@@ -100,7 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - Restrict automatic exports to canonical targets strictly beneath local workspaces, rejecting path traversal and existing symbolic-link components.
-- Escape file paths, diagnostic messages, sources, and codes so Markdown and HTML-like input renders as literal text.
+- Collapse line breaks in file paths, diagnostic messages, sources, and codes, and escape pipes inside `flat-table` cells, so such input cannot forge a heading or split a table row.
 
 ## [0.0.1] - 2026-07-12
 
