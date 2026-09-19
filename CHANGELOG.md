@@ -4,14 +4,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Report the diagnostics `exportProblems.minimumSeverity` excluded in the export's confirmation message, alongside a note that the Problems panel's own filter box is not applied to exports.
+
 ### Fixed
 
 - Exclude the automatic `workspace-file` export target from the diagnostics it collects, so a linter's complaints about a previous export no longer appear in the next one.
 - Distinguish an empty export caused by `exportProblems.minimumSeverity` from a workspace with no problems, naming the effective threshold and the number of diagnostics it excluded instead of reporting `No problems found in workspace.`
-
-### Added
-
-- Report the diagnostics `exportProblems.minimumSeverity` excluded in the export's confirmation message, alongside a note that the Problems panel's own filter box is not applied to exports.
 
 ## [1.1.3] - 2026-09-17
 

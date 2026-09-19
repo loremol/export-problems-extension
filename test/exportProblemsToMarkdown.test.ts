@@ -1779,3 +1779,108 @@ test('reports the effective threshold for an unrecognized minimum-severity name'
 
   assert.deepEqual(host.informationMessages, ['No problems found in workspace.']);
 });
+
+test('excludes the export target when the workspace root is reached through a symlink', async (t) => {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-symlink-root-'));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+
+  const realRoot = path.join(tempRoot, 'real-project');
+  const linkedRoot = path.join(tempRoot, 'linked-project');
+  await mkdir(realRoot);
+
+  try {
+    await symlink(realRoot, linkedRoot, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) {
+    t.skip(`Cannot create symbolic links on this platform/user: ${(error as Error).message}`);
+    return;
+  }
+
+  // VS Code opens the document under the canonical path once it is written, so a linter
+  // files its diagnostics against the real (canonical) path, not the symlinked one the
+  // workspace folder is configured with.
+  const canonicalTargetPath = path.join(realRoot, 'problems.md');
+  const host = createVscode(linkedRoot, 'problems.md', {
+    configuration: { includeSummary: false },
+    diagnosticEntries: [
+      [TestUri.file(canonicalTargetPath), [{
+        severity: 1,
+        range: createRange(),
+        message: 'Stale problem from the previous export',
+      }]],
+      [TestUri.file(path.join(linkedRoot, 'source.ts')), [{
+        severity: 0,
+        range: createRange(),
+        message: 'Real problem',
+      }]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const written = await readFile(canonicalTargetPath, 'utf8');
+  assert.ok(written.includes('Real problem'));
+  assert.ok(!written.includes('Stale problem from the previous export'));
+});
+
+test('excludes the export target before counting hidden diagnostics in a workspace-file export', async (t) => {
+  const workspaceRoot = await mkdtemp(
+    path.join(tmpdir(), 'export-problems-target-excluded-from-hidden-')
+  );
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { minimumSeverity: 'Error', openAfterExport: false },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'source.ts')), [
+        { severity: 0, range: createRange(), message: 'Kept error' },
+        { severity: 1, range: createRange(1), message: 'Hidden warning' },
+      ]],
+      [TestUri.file(path.join(workspaceRoot, 'problems.md')), [
+        { severity: 1, range: createRange(), message: 'Stale warning from a previous export' },
+      ]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  // The 1/1 counts prove the export target's own warning was excluded before the hidden
+  // diagnostics diff, rather than counted as a diagnostic the threshold hid.
+  assert.deepEqual(host.informationMessages, [
+    'Problems exported to problems.md. '
+    + '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + "The Problems panel's own filter box is not applied to exports.",
+  ]);
+});
+
+test('appends the hidden-diagnostics notice to a successful save-dialog export', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-partial-save-dialog');
+  const selectedUri = TestUri.file(path.join(workspaceRoot, 'problems.md'));
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'Error',
+      outputMode: 'save-dialog',
+      openAfterExport: false,
+    },
+    saveDialogResult: selectedUri,
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'source.ts')), [
+        { severity: 0, range: createRange(), message: 'Kept error' },
+        { severity: 1, range: createRange(1), message: 'Hidden warning' },
+      ]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.informationMessages, [
+    'Problems exported to problems.md. '
+    + '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + "The Problems panel's own filter box is not applied to exports.",
+  ]);
+});

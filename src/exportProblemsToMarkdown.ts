@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   getSafeDialogFileName,
+  resolveSafeWorkspaceTarget,
   selectWorkspaceFileTarget,
   writeFileToSafeWorkspaceTarget,
 } from './workspacePathSecurity';
@@ -134,29 +135,42 @@ function hasMultipleWorkspaceFolders(): boolean {
   return (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
 }
 
-// Resolves the file an automatic workspace export writes, so a report never includes itself
-function resolveExportTargetPath(options: ExportOptions): string | undefined {
+// Resolves the paths an automatic workspace export may write to, so a report never includes itself
+//
+// The automatic write path canonicalizes the target (writeFileToSafeWorkspaceTarget resolves
+// symlinks), but VS Code files a linter's diagnostics against whichever URI the document was
+// actually opened with. When the workspace root is reached through a symlink, that is the
+// canonical path, not the lexical one this function would otherwise return alone — so both
+// candidates are returned and matched, rather than one replacing the other.
+async function resolveExportTargetPaths(options: ExportOptions): Promise<string[]> {
   if (options.outputMode !== 'workspace-file') {
-    return undefined;
+    return [];
   }
 
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder || workspaceFolder.uri.scheme !== 'file') {
-    return undefined;
+    return [];
   }
 
-  return path.resolve(workspaceFolder.uri.fsPath, options.defaultFileName);
+  const lexicalPath = path.resolve(workspaceFolder.uri.fsPath, options.defaultFileName);
+  const canonicalPath = await resolveSafeWorkspaceTarget(
+    workspaceFolder.uri.fsPath,
+    options.defaultFileName
+  );
+
+  return canonicalPath !== undefined && canonicalPath !== lexicalPath
+    ? [lexicalPath, canonicalPath]
+    : [lexicalPath];
 }
 
 // Returns true when a diagnostic's file is the export's own output file
 function isExportTargetUri(
   uri: vscode.Uri,
-  exportTargetPath: string | undefined
+  exportTargetPaths: readonly string[]
 ): boolean {
   return (
-    exportTargetPath !== undefined &&
     uri.scheme === 'file' &&
-    path.resolve(uri.fsPath) === exportTargetPath
+    exportTargetPaths.some((exportTargetPath) => path.resolve(uri.fsPath) === exportTargetPath)
   );
 }
 
@@ -164,11 +178,11 @@ function isExportTargetUri(
 function collectFilteredDiagnosticEntries(
   threshold: vscode.DiagnosticSeverity,
   includeWorkspaceFolderName: boolean,
-  exportTargetPath: string | undefined
+  exportTargetPaths: readonly string[]
 ): DiagnosticEntry[] {
   return vscode.languages
     .getDiagnostics()
-    .filter(([uri]) => !isExportTargetUri(uri, exportTargetPath))
+    .filter(([uri]) => !isExportTargetUri(uri, exportTargetPaths))
     .map(([uri, diagnostics]): DiagnosticEntry => [
       uri,
       diagnostics
@@ -195,16 +209,21 @@ function collectFilteredDiagnosticEntries(
 // Collects every diagnostic the workspace reports, whatever the configured threshold
 function collectAllDiagnosticEntries(
   includeWorkspaceFolderName: boolean,
-  exportTargetPath: string | undefined
+  exportTargetPaths: readonly string[]
 ): DiagnosticEntry[] {
   return collectFilteredDiagnosticEntries(
     vscode.DiagnosticSeverity.Hint,
     includeWorkspaceFolderName,
-    exportTargetPath
+    exportTargetPaths
   );
 }
 
 // Returns the diagnostics the threshold removed, dropping files that lost nothing
+//
+// Diffs the two collections by Diagnostic object identity. That is only valid because both
+// collections are taken back-to-back in the same tick, with no await between them — no marker
+// change can interleave and re-materialize the Diagnostic objects in that window. If an await
+// is ever introduced between the two collect calls, every diagnostic will silently read as hidden.
 function findHiddenDiagnosticEntries(
   allEntries: DiagnosticEntry[],
   filteredEntries: DiagnosticEntry[]
@@ -248,14 +267,16 @@ function formatHiddenDiagnosticsNotice(
 export async function exportProblemsToMarkdown(): Promise<void> {
   const options = readOptions();
   const includeWorkspaceFolderName = hasMultipleWorkspaceFolders();
-  const exportTargetPath = resolveExportTargetPath(options);
+  const exportTargetPaths = await resolveExportTargetPaths(options);
+  // The two collections below must stay adjacent and synchronous with respect to each other —
+  // see the same-tick identity constraint documented on findHiddenDiagnosticEntries.
   const entries = collectFilteredDiagnosticEntries(
     options.threshold,
     includeWorkspaceFolderName,
-    exportTargetPath
+    exportTargetPaths
   );
   const hiddenEntries = findHiddenDiagnosticEntries(
-    collectAllDiagnosticEntries(includeWorkspaceFolderName, exportTargetPath),
+    collectAllDiagnosticEntries(includeWorkspaceFolderName, exportTargetPaths),
     entries
   );
   const hiddenNotice = formatHiddenDiagnosticsNotice(
