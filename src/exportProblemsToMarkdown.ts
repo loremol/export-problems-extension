@@ -75,6 +75,7 @@ type DiagnosticEntry = [vscode.Uri, vscode.Diagnostic[]];
 
 interface ExportOptions {
   threshold: vscode.DiagnosticSeverity;
+  minimumSeverityName: string;
   groupBy: 'file' | 'severity' | 'flat-table';
   includeSummary: boolean;
   summaryTitle: string;
@@ -111,8 +112,10 @@ function readStringSetting<T extends string>(
 function readOptions(): ExportOptions {
   const config = vscode.workspace.getConfiguration('exportProblems');
   const minimumSeverityName = readStringSetting(config, 'minimumSeverity', 'Hint');
+  const threshold = readSeverityThreshold(minimumSeverityName);
   return {
-    threshold: readSeverityThreshold(minimumSeverityName),
+    threshold,
+    minimumSeverityName: severityLabels[threshold],
     groupBy: readStringSetting<ExportOptions['groupBy']>(config, 'groupBy', 'file'),
     includeSummary: config.get<boolean>('includeSummary', true),
     summaryTitle: readStringSetting(config, 'summaryTitle', 'Problems'),
@@ -157,8 +160,8 @@ function isExportTargetUri(
   );
 }
 
-// Collects matching diagnostics in stable path and position order
-function collectDiagnosticEntries(
+// Collects diagnostics that meet the threshold, in stable path and position order
+function collectFilteredDiagnosticEntries(
   threshold: vscode.DiagnosticSeverity,
   includeWorkspaceFolderName: boolean,
   exportTargetPath: string | undefined
@@ -189,31 +192,101 @@ function collectDiagnosticEntries(
     });
 }
 
+// Collects every diagnostic the workspace reports, whatever the configured threshold
+function collectAllDiagnosticEntries(
+  includeWorkspaceFolderName: boolean,
+  exportTargetPath: string | undefined
+): DiagnosticEntry[] {
+  return collectFilteredDiagnosticEntries(
+    vscode.DiagnosticSeverity.Hint,
+    includeWorkspaceFolderName,
+    exportTargetPath
+  );
+}
+
+// Returns the diagnostics the threshold removed, dropping files that lost nothing
+function findHiddenDiagnosticEntries(
+  allEntries: DiagnosticEntry[],
+  filteredEntries: DiagnosticEntry[]
+): DiagnosticEntry[] {
+  const includedDiagnostics = new Set<vscode.Diagnostic>();
+  for (const [, diagnostics] of filteredEntries) {
+    for (const diagnostic of diagnostics) {
+      includedDiagnostics.add(diagnostic);
+    }
+  }
+
+  return allEntries
+    .map(([uri, diagnostics]): DiagnosticEntry => [
+      uri,
+      diagnostics.filter((diagnostic) => !includedDiagnostics.has(diagnostic)),
+    ])
+    .filter(([, diagnostics]) => diagnostics.length > 0);
+}
+
+// Describes the diagnostics the threshold hid, or nothing when the export is complete
+function formatHiddenDiagnosticsNotice(
+  hiddenEntries: DiagnosticEntry[],
+  minimumSeverityName: string
+): string {
+  const hiddenCount = hiddenEntries.reduce(
+    (sum, [, diagnostics]) => sum + diagnostics.length,
+    0
+  );
+  if (hiddenCount === 0) {
+    return '';
+  }
+
+  return (
+    `${hiddenCount} problem(s) in ${hiddenEntries.length} file(s) were excluded by `
+    + `exportProblems.minimumSeverity (${minimumSeverityName}). `
+    + "The Problems panel's own filter box is not applied to exports."
+  );
+}
+
 // Exports the current workspace diagnostics as Markdown
 export async function exportProblemsToMarkdown(): Promise<void> {
   const options = readOptions();
   const includeWorkspaceFolderName = hasMultipleWorkspaceFolders();
   const exportTargetPath = resolveExportTargetPath(options);
-  const entries = collectDiagnosticEntries(
+  const entries = collectFilteredDiagnosticEntries(
     options.threshold,
     includeWorkspaceFolderName,
     exportTargetPath
   );
+  const hiddenEntries = findHiddenDiagnosticEntries(
+    collectAllDiagnosticEntries(includeWorkspaceFolderName, exportTargetPath),
+    entries
+  );
+  const hiddenNotice = formatHiddenDiagnosticsNotice(
+    hiddenEntries,
+    options.minimumSeverityName
+  );
 
   if (entries.length === 0) {
-    vscode.window.showInformationMessage('No problems found in workspace.');
+    vscode.window.showInformationMessage(
+      hiddenNotice
+        ? `No problems at or above severity ${options.minimumSeverityName}. ${hiddenNotice}`
+        : 'No problems found in workspace.'
+    );
     return;
   }
 
   const content = buildMarkdown(entries, includeWorkspaceFolderName, options);
-  await deliverMarkdown(content, options);
+  await deliverMarkdown(content, options, hiddenNotice);
 }
 
 // Sends generated Markdown to the configured destination
-async function deliverMarkdown(content: string, options: ExportOptions): Promise<void> {
+async function deliverMarkdown(
+  content: string,
+  options: ExportOptions,
+  hiddenNotice: string
+): Promise<void> {
   if (options.outputMode === 'clipboard') {
     await vscode.env.clipboard.writeText(content);
-    vscode.window.showInformationMessage('Problems exported to clipboard.');
+    vscode.window.showInformationMessage(
+      appendHiddenNotice('Problems exported to clipboard.', hiddenNotice)
+    );
     return;
   }
 
@@ -223,7 +296,7 @@ async function deliverMarkdown(content: string, options: ExportOptions): Promise
   }
 
   if (target.kind === 'selected') {
-    await writeMarkdownFile(target.uri, content, options.openAfterExport);
+    await writeMarkdownFile(target.uri, content, options.openAfterExport, hiddenNotice);
     return;
   }
 
@@ -235,14 +308,15 @@ async function deliverMarkdown(content: string, options: ExportOptions): Promise
   if (writtenPath) {
     await completeMarkdownFileExport(
       vscode.Uri.file(writtenPath),
-      options.openAfterExport
+      options.openAfterExport,
+      hiddenNotice
     );
     return;
   }
 
   const fallbackUri = await showMarkdownSaveDialog(target.fallbackUri);
   if (fallbackUri) {
-    await writeMarkdownFile(fallbackUri, content, options.openAfterExport);
+    await writeMarkdownFile(fallbackUri, content, options.openAfterExport, hiddenNotice);
   }
 }
 
@@ -299,20 +373,27 @@ function showMarkdownSaveDialog(
   });
 }
 
+// Joins a completion message to a hidden-diagnostics notice, omitting an empty one
+function appendHiddenNotice(message: string, hiddenNotice: string): string {
+  return hiddenNotice ? `${message} ${hiddenNotice}` : message;
+}
+
 // Writes Markdown to a user-selected URI
 async function writeMarkdownFile(
   targetUri: vscode.Uri,
   content: string,
-  openAfterExport: boolean
+  openAfterExport: boolean,
+  hiddenNotice: string
 ): Promise<void> {
   await vscode.workspace.fs.writeFile(targetUri, Buffer.from(content, 'utf8'));
-  await completeMarkdownFileExport(targetUri, openAfterExport);
+  await completeMarkdownFileExport(targetUri, openAfterExport, hiddenNotice);
 }
 
 // Reports or opens a completed file export
 async function completeMarkdownFileExport(
   targetUri: vscode.Uri,
-  openAfterExport: boolean
+  openAfterExport: boolean,
+  hiddenNotice: string
 ): Promise<void> {
   if (openAfterExport) {
     const document = await vscode.workspace.openTextDocument(targetUri);
@@ -321,7 +402,10 @@ async function completeMarkdownFileExport(
   }
 
   vscode.window.showInformationMessage(
-    `Problems exported to ${vscode.workspace.asRelativePath(targetUri)}.`
+    appendHiddenNotice(
+      `Problems exported to ${vscode.workspace.asRelativePath(targetUri)}.`,
+      hiddenNotice
+    )
   );
 }
 

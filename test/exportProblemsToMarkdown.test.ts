@@ -370,7 +370,11 @@ test('reports when no diagnostics meet the configured severity threshold', async
 
   await host.getRegisteredCommand()();
 
-  assert.deepEqual(host.informationMessages, ['No problems found in workspace.']);
+  assert.deepEqual(host.informationMessages, [
+    'No problems at or above severity Error. '
+    + '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + "The Problems panel's own filter box is not applied to exports.",
+  ]);
   assert.equal(host.getClipboardText(), undefined);
   assert.equal(host.writes.length, 0);
   assert.equal(host.saveDialogs.length, 0);
@@ -1686,4 +1690,92 @@ test('keeps the export file name in the report when writing elsewhere', async ()
   await host.getRegisteredCommand()();
 
   assert.ok(host.getClipboardText()?.includes('Markdown problem'));
+});
+
+test('keeps the plain empty-export message when nothing was filtered out', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-genuinely-clean');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { outputMode: 'clipboard' },
+    diagnosticEntries: [],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.informationMessages, ['No problems found in workspace.']);
+});
+
+test('counts hidden diagnostics across every affected file', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-hidden-count');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'Error',
+      outputMode: 'clipboard',
+    },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'first.ts')), [
+        { severity: 1, range: createRange(), message: 'Warning one' },
+        { severity: 2, range: createRange(1), message: 'Info one' },
+      ]],
+      [TestUri.file(path.join(workspaceRoot, 'second.ts')), [
+        { severity: 3, range: createRange(), message: 'Hint one' },
+      ]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.informationMessages, [
+    'No problems at or above severity Error. '
+    + '3 problem(s) in 2 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + "The Problems panel's own filter box is not applied to exports.",
+  ]);
+});
+
+test('appends the hidden-diagnostics notice to a successful clipboard export', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-partial-clipboard');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'Error',
+      outputMode: 'clipboard',
+    },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'source.ts')), [
+        { severity: 0, range: createRange(), message: 'Kept error' },
+        { severity: 1, range: createRange(1), message: 'Hidden warning' },
+      ]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.ok(host.getClipboardText()?.includes('Kept error'));
+  assert.ok(!host.getClipboardText()?.includes('Hidden warning'));
+  assert.deepEqual(host.informationMessages, [
+    'Problems exported to clipboard. '
+    + '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + "The Problems panel's own filter box is not applied to exports.",
+  ]);
+});
+
+test('reports the effective threshold for an unrecognized minimum-severity name', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-unknown-threshold');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'toString' as 'Error',
+      outputMode: 'clipboard',
+    },
+    diagnosticEntries: [],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.informationMessages, ['No problems found in workspace.']);
 });
