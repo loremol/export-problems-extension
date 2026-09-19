@@ -135,18 +135,8 @@ function hasMultipleWorkspaceFolders(): boolean {
   return (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
 }
 
-// Resolves the paths an automatic workspace export may write to, so a report never includes itself
-//
-// The automatic write path canonicalizes the target (writeFileToSafeWorkspaceTarget resolves
-// symlinks), but VS Code files a linter's diagnostics against whichever URI the document was
-// actually opened with. When the workspace root is reached through a symlink, that is the
-// canonical path, not the lexical one this function would otherwise return alone — so both
-// candidates are returned and matched, rather than one replacing the other.
+// Resolves every path the configured export target names, since a symlinked root makes lexical and canonical differ
 async function resolveExportTargetPaths(options: ExportOptions): Promise<string[]> {
-  if (options.outputMode !== 'workspace-file') {
-    return [];
-  }
-
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder || workspaceFolder.uri.scheme !== 'file') {
     return [];
@@ -218,12 +208,7 @@ function collectAllDiagnosticEntries(
   );
 }
 
-// Returns the diagnostics the threshold removed, dropping files that lost nothing
-//
-// Diffs the two collections by Diagnostic object identity. That is only valid because both
-// collections are taken back-to-back in the same tick, with no await between them — no marker
-// change can interleave and re-materialize the Diagnostic objects in that window. If an await
-// is ever introduced between the two collect calls, every diagnostic will silently read as hidden.
+// Returns the diagnostics the threshold removed, diffed by identity so both collections must share a tick
 function findHiddenDiagnosticEntries(
   allEntries: DiagnosticEntry[],
   filteredEntries: DiagnosticEntry[]
@@ -243,6 +228,11 @@ function findHiddenDiagnosticEntries(
     .filter(([, diagnostics]) => diagnostics.length > 0);
 }
 
+// Names a countable noun, pluralizing it for every count but one
+function pluralize(count: number, noun: string): string {
+  return count === 1 ? noun : `${noun}s`;
+}
+
 // Describes the diagnostics the threshold hid, or nothing when the export is complete
 function formatHiddenDiagnosticsNotice(
   hiddenEntries: DiagnosticEntry[],
@@ -256,8 +246,11 @@ function formatHiddenDiagnosticsNotice(
     return '';
   }
 
+  const fileCount = hiddenEntries.length;
   return (
-    `${hiddenCount} problem(s) in ${hiddenEntries.length} file(s) were excluded by `
+    `${hiddenCount} ${pluralize(hiddenCount, 'problem')} in `
+    + `${fileCount} ${pluralize(fileCount, 'file')} `
+    + `${hiddenCount === 1 ? 'was' : 'were'} excluded by `
     + `exportProblems.minimumSeverity (${minimumSeverityName}). `
     + "The Problems panel's own filter box is not applied to exports."
   );
@@ -410,7 +403,7 @@ async function writeMarkdownFile(
   await completeMarkdownFileExport(targetUri, openAfterExport, hiddenNotice);
 }
 
-// Reports or opens a completed file export
+// Reports a completed file export, opening it first when configured
 async function completeMarkdownFileExport(
   targetUri: vscode.Uri,
   openAfterExport: boolean,
@@ -419,14 +412,6 @@ async function completeMarkdownFileExport(
   if (openAfterExport) {
     const document = await vscode.workspace.openTextDocument(targetUri);
     await vscode.window.showTextDocument(document);
-    // Opening the report already tells the user the export succeeded, so only the notice is
-    // worth a notification here — and it is empty at the default threshold, where nothing can
-    // be hidden. Without this the threshold's effect would go unreported in the default
-    // configuration, which is the confusion this notice exists to prevent.
-    if (hiddenNotice) {
-      vscode.window.showInformationMessage(hiddenNotice);
-    }
-    return;
   }
 
   vscode.window.showInformationMessage(

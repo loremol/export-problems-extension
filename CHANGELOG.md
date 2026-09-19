@@ -6,11 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Report the diagnostics `exportProblems.minimumSeverity` excluded in the export's confirmation message, alongside a note that the Problems panel's own filter box is not applied to exports. The report is also shown on its own when `openAfterExport` is enabled, which otherwise suppresses the confirmation message and would have left the threshold's effect unreported in the default configuration.
+- Report the diagnostics excluded because of `exportProblems.minimumSeverity` in the export's confirmation message, alongside a note that the Problems panel's own filter box is not applied to exports.
+
+### Changed
+
+- Confirm a completed export in every output mode. Enabling `openAfterExport` previously opened the report and showed no notification at all, so the same export reported different amounts depending on its mode, and the excluded-diagnostics count went unreported in the default configuration. The confirmation message and everything appended to it no longer depend on the output mode.
 
 ### Fixed
 
-- Exclude the automatic `workspace-file` export target from the diagnostics it collects, so a linter's complaints about a previous export no longer appear in the next one.
+- Exclude the configured export target from the diagnostics an export collects, in every output mode, so a linter's complaints about a previous export no longer appear in the next one. A `save-dialog` export saved under a name other than `exportProblems.defaultFileName` is still unknown at collection time and can be reported by a later export.
 - Distinguish an empty export caused by `exportProblems.minimumSeverity` from a workspace with no problems, naming the effective threshold and the number of diagnostics it excluded instead of reporting `No problems found in workspace.`
 
 ## [1.1.3] - 2026-09-17

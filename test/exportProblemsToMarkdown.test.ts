@@ -372,7 +372,7 @@ test('reports when no diagnostics meet the configured severity threshold', async
 
   assert.deepEqual(host.informationMessages, [
     'No problems at or above severity Error. '
-    + '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + '1 problem in 1 file was excluded by exportProblems.minimumSeverity (Error). '
     + "The Problems panel's own filter box is not applied to exports.",
   ]);
   assert.equal(host.getClipboardText(), undefined);
@@ -1116,7 +1116,7 @@ test('opens the exported workspace file when configured', async (t) => {
   const expectedPath = path.join(workspaceRoot, 'problems.md');
   assert.deepEqual(host.openedDocuments.map((uri) => uri.fsPath), [expectedPath]);
   assert.deepEqual(host.shownDocuments.map((uri) => uri.fsPath), [expectedPath]);
-  assert.equal(host.informationMessages.length, 0);
+  assert.deepEqual(host.informationMessages, ['Problems exported to problems.md.']);
 });
 
 test('propagates document opening failures without reporting success', async () => {
@@ -1672,24 +1672,46 @@ test('excludes the export file itself from an automatic workspace export', async
   assert.ok(!written.includes('# problems.md'));
 });
 
-test('keeps the export file name in the report when writing elsewhere', async () => {
-  const workspaceRoot = path.join(tmpdir(), 'export-problems-clipboard-keeps-target');
-  const host = createVscode(workspaceRoot, 'problems.md', {
-    configuration: { includeSummary: false, outputMode: 'clipboard' },
-    diagnosticEntries: [
-      [TestUri.file(path.join(workspaceRoot, 'problems.md')), [{
-        severity: 1,
-        range: createRange(),
-        message: 'Markdown problem',
-      }]],
-    ],
-  });
-  const extension = loadExtension(host.vscode);
-  activateExtension(extension);
+test('excludes the export target in every output mode', async (t) => {
+  for (const outputMode of ['clipboard', 'save-dialog', 'workspace-file'] as const) {
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), `export-problems-target-${outputMode}-`));
+    t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+    const selectedUri = TestUri.file(path.join(workspaceRoot, 'chosen.md'));
+    const host = createVscode(workspaceRoot, 'problems.md', {
+      configuration: { includeSummary: false, outputMode, openAfterExport: false },
+      saveDialogResult: selectedUri,
+      diagnosticEntries: [
+        [TestUri.file(path.join(workspaceRoot, 'problems.md')), [{
+          severity: 1,
+          range: createRange(),
+          message: 'Stale problem from a previous export',
+        }]],
+        [TestUri.file(path.join(workspaceRoot, 'source.ts')), [{
+          severity: 0,
+          range: createRange(),
+          message: 'Real problem',
+        }]],
+      ],
+    });
+    const extension = loadExtension(host.vscode);
+    activateExtension(extension);
 
-  await host.getRegisteredCommand()();
+    await host.getRegisteredCommand()();
 
-  assert.ok(host.getClipboardText()?.includes('Markdown problem'));
+    let exported: string | undefined;
+    if (outputMode === 'clipboard') {
+      exported = host.getClipboardText();
+    } else if (outputMode === 'save-dialog') {
+      // The mocked save dialog resolves to chosen.md, written through the mocked vscode.workspace.fs
+      exported = Buffer.from(host.writes[0].content).toString('utf8');
+    } else {
+      // An automatic workspace export writes through node:fs, so it never reaches host.writes
+      exported = await readFile(path.join(workspaceRoot, 'problems.md'), 'utf8');
+    }
+    assert.ok(exported?.includes('Real problem'), outputMode);
+    assert.ok(!exported?.includes('Stale problem from a previous export'), outputMode);
+    assert.ok(!exported?.includes('# problems.md'), outputMode);
+  }
 });
 
 test('keeps the plain empty-export message when nothing was filtered out', async () => {
@@ -1730,7 +1752,33 @@ test('counts hidden diagnostics across every affected file', async () => {
 
   assert.deepEqual(host.informationMessages, [
     'No problems at or above severity Error. '
-    + '3 problem(s) in 2 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + '3 problems in 2 files were excluded by exportProblems.minimumSeverity (Error). '
+    + "The Problems panel's own filter box is not applied to exports.",
+  ]);
+});
+
+test('pluralizes the hidden problem and file counts independently', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-hidden-mixed-plural');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'Error',
+      outputMode: 'clipboard',
+    },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'only.ts')), [
+        { severity: 1, range: createRange(), message: 'Warning one' },
+        { severity: 2, range: createRange(1), message: 'Info one' },
+      ]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.informationMessages, [
+    'No problems at or above severity Error. '
+    + '2 problems in 1 file were excluded by exportProblems.minimumSeverity (Error). '
     + "The Problems panel's own filter box is not applied to exports.",
   ]);
 });
@@ -1758,7 +1806,7 @@ test('appends the hidden-diagnostics notice to a successful clipboard export', a
   assert.ok(!host.getClipboardText()?.includes('Hidden warning'));
   assert.deepEqual(host.informationMessages, [
     'Problems exported to clipboard. '
-    + '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + '1 problem in 1 file was excluded by exportProblems.minimumSeverity (Error). '
     + "The Problems panel's own filter box is not applied to exports.",
   ]);
 });
@@ -1851,7 +1899,7 @@ test('excludes the export target before counting hidden diagnostics in a workspa
   // diagnostics diff, rather than counted as a diagnostic the threshold hid.
   assert.deepEqual(host.informationMessages, [
     'Problems exported to problems.md. '
-    + '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + '1 problem in 1 file was excluded by exportProblems.minimumSeverity (Error). '
     + "The Problems panel's own filter box is not applied to exports.",
   ]);
 });
@@ -1882,7 +1930,8 @@ test('reports hidden diagnostics even when the export is opened after writing', 
   assert.deepEqual(host.openedDocuments.map((uri) => uri.fsPath), [expectedPath]);
   assert.deepEqual(host.shownDocuments.map((uri) => uri.fsPath), [expectedPath]);
   assert.deepEqual(host.informationMessages, [
-    '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    'Problems exported to problems.md. '
+    + '1 problem in 1 file was excluded by exportProblems.minimumSeverity (Error). '
     + "The Problems panel's own filter box is not applied to exports.",
   ]);
 });
@@ -1911,7 +1960,7 @@ test('appends the hidden-diagnostics notice to a successful save-dialog export',
 
   assert.deepEqual(host.informationMessages, [
     'Problems exported to problems.md. '
-    + '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + '1 problem in 1 file was excluded by exportProblems.minimumSeverity (Error). '
     + "The Problems panel's own filter box is not applied to exports.",
   ]);
 });
