@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
 import test from 'node:test';
 import {
   describeError,
@@ -6,6 +8,15 @@ import {
   formatExportFailure,
   runExportStep,
 } from '../src/exportErrors';
+
+test('has no VS Code module dependency', () => {
+  const source = readFileSync(
+    path.resolve(__dirname, '../../src/exportErrors.ts'),
+    'utf8'
+  );
+
+  assert.ok(!source.includes("'vscode'") && !source.includes('"vscode"'));
+});
 
 test('describes an error by its message', () => {
   assert.equal(describeError(new Error('permission denied')), 'permission denied');

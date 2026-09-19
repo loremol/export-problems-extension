@@ -2013,8 +2013,9 @@ test('logs the original failure for the Extension Host log', async (t) => {
 
   await host.getRegisteredCommand()();
 
-  assert.equal(loggedArguments.length, 1);
-  assert.ok(loggedArguments[0].includes(cause));
+  assert.deepEqual(loggedArguments, [
+    ['Export Problems to Markdown failed', cause],
+  ]);
 });
 
 test('names the clipboard when the clipboard cannot be written', async (t) => {
