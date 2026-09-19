@@ -419,6 +419,13 @@ async function completeMarkdownFileExport(
   if (openAfterExport) {
     const document = await vscode.workspace.openTextDocument(targetUri);
     await vscode.window.showTextDocument(document);
+    // Opening the report already tells the user the export succeeded, so only the notice is
+    // worth a notification here — and it is empty at the default threshold, where nothing can
+    // be hidden. Without this the threshold's effect would go unreported in the default
+    // configuration, which is the confusion this notice exists to prevent.
+    if (hiddenNotice) {
+      vscode.window.showInformationMessage(hiddenNotice);
+    }
     return;
   }
 

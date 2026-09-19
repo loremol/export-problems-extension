@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Report the diagnostics `exportProblems.minimumSeverity` excluded in the export's confirmation message, alongside a note that the Problems panel's own filter box is not applied to exports.
+- Report the diagnostics `exportProblems.minimumSeverity` excluded in the export's confirmation message, alongside a note that the Problems panel's own filter box is not applied to exports. The report is also shown on its own when `openAfterExport` is enabled, which otherwise suppresses the confirmation message and would have left the threshold's effect unreported in the default configuration.
 
 ### Fixed
 

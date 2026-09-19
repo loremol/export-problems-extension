@@ -1856,6 +1856,37 @@ test('excludes the export target before counting hidden diagnostics in a workspa
   ]);
 });
 
+test('reports hidden diagnostics even when the export is opened after writing', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-open-hidden-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      minimumSeverity: 'Error',
+      includeSummary: false,
+      openAfterExport: true,
+    },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'source.ts')), [
+        { severity: 0, range: createRange(), message: 'Kept error' },
+        { severity: 1, range: createRange(1), message: 'Hidden warning' },
+      ]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const expectedPath = path.join(workspaceRoot, 'problems.md');
+  assert.deepEqual(host.openedDocuments.map((uri) => uri.fsPath), [expectedPath]);
+  assert.deepEqual(host.shownDocuments.map((uri) => uri.fsPath), [expectedPath]);
+  assert.deepEqual(host.informationMessages, [
+    '1 problem(s) in 1 file(s) were excluded by exportProblems.minimumSeverity (Error). '
+    + "The Problems panel's own filter box is not applied to exports.",
+  ]);
+});
+
 test('appends the hidden-diagnostics notice to a successful save-dialog export', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-partial-save-dialog');
   const selectedUri = TestUri.file(path.join(workspaceRoot, 'problems.md'));
