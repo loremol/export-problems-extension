@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Describe a failure's cause in one notification line, naming a Node or VS Code error code only when the message does not already carry it, collapsing line breaks, and abbreviating text longer than 300 characters.
 - Report the diagnostics excluded because of `exportProblems.minimumSeverity` in the export's confirmation message, alongside a note that the Problems panel's own filter box is not applied to exports.
 
 ### Changed
