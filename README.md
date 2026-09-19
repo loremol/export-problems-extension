@@ -49,12 +49,7 @@ Example output produced:
 ### Grouping (`groupBy`)
 - `file`: one heading per file (`## <path>` by default beneath the summary, or `# <path>` when it is disabled).
 - `severity`: one heading per severity (`## Errors` by default beneath the summary, or `# Errors` when it is disabled), with the file path in each entry.
-- `flat-table`: a single Markdown table, one row per diagnostic:
-```markdown
-| Severity | File | Line | Source | Message |
-| --- | --- | --- | --- | --- |
-| Error | src/index.ts | 12:5 | ts, 2322 | Type 'string' is not assignable to type 'number'. |
-```
+- `flat-table`: a single Markdown table, one row per diagnostic.
 
 ## Development
 - `npm ci`
