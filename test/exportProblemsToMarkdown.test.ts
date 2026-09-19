@@ -15,7 +15,7 @@ import {
 import Module = require('node:module');
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import type * as vscode from 'vscode';
 import { createRange, TestUri } from './vscodeMock';
 
@@ -275,6 +275,15 @@ function loadExtension(vscodeApi: VscodeApi): ExtensionModule {
 
 function activateExtension(extension: ExtensionModule): void {
   extension.activate({ subscriptions: [] });
+}
+
+// Silences the boundary's Extension Host logging, which would otherwise print stacks on a passing run
+function silenceConsoleErrors(t: TestContext): void {
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  t.after(() => {
+    console.error = originalConsoleError;
+  });
 }
 
 test('includes workspace folder names in paths when multiple folders are open', async () => {
@@ -889,7 +898,8 @@ test('writes a target selected in the save dialog', async () => {
   assert.equal(host.shownDocuments.length, 0);
 });
 
-test('propagates clipboard write failures without reporting success', async () => {
+test('reports clipboard write failures without reporting success', async (t) => {
+  silenceConsoleErrors(t);
   const workspaceRoot = path.join(tmpdir(), 'export-problems-clipboard-failure');
   const failure = new Error('Clipboard write failed');
   const host = createVscode(workspaceRoot, 'problems.md', {
@@ -901,16 +911,16 @@ test('propagates clipboard write failures without reporting success', async () =
   const extension = loadExtension(host.vscode);
   activateExtension(extension);
 
-  await assert.rejects(
-    async () => {
-      await host.getRegisteredCommand()();
-    },
-    (error: unknown) => error === failure
-  );
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.errorMessages, [
+    'Export Problems to Markdown failed: Clipboard write failed.',
+  ]);
   assert.deepEqual(host.informationMessages, []);
 });
 
-test('propagates file write failures without reporting success', async () => {
+test('reports file write failures without reporting success', async (t) => {
+  silenceConsoleErrors(t);
   const workspaceRoot = path.join(tmpdir(), 'export-problems-file-write-failure');
   const selectedUri = TestUri.file(path.join(workspaceRoot, 'problems.md'));
   const failure = new Error('File write failed');
@@ -924,12 +934,11 @@ test('propagates file write failures without reporting success', async () => {
   const extension = loadExtension(host.vscode);
   activateExtension(extension);
 
-  await assert.rejects(
-    async () => {
-      await host.getRegisteredCommand()();
-    },
-    (error: unknown) => error === failure
-  );
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.errorMessages, [
+    'Export Problems to Markdown failed: File write failed.',
+  ]);
   assert.deepEqual(host.informationMessages, []);
 });
 
@@ -1119,7 +1128,8 @@ test('opens the exported workspace file when configured', async (t) => {
   assert.deepEqual(host.informationMessages, ['Problems exported to problems.md.']);
 });
 
-test('propagates document opening failures without reporting success', async () => {
+test('reports document opening failures without reporting success', async (t) => {
+  silenceConsoleErrors(t);
   const workspaceRoot = path.join(tmpdir(), 'export-problems-document-open-failure');
   const selectedUri = TestUri.file(path.join(workspaceRoot, 'problems.md'));
   const failure = new Error('Document opening failed');
@@ -1133,12 +1143,11 @@ test('propagates document opening failures without reporting success', async () 
   const extension = loadExtension(host.vscode);
   activateExtension(extension);
 
-  await assert.rejects(
-    async () => {
-      await host.getRegisteredCommand()();
-    },
-    (error: unknown) => error === failure
-  );
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.errorMessages, [
+    'Export Problems to Markdown failed: Document opening failed.',
+  ]);
   assert.deepEqual(host.informationMessages, []);
 });
 
@@ -1963,4 +1972,47 @@ test('appends the hidden-diagnostics notice to a successful save-dialog export',
     + '1 problem in 1 file was excluded by exportProblems.minimumSeverity (Error). '
     + "The Problems panel's own filter box is not applied to exports.",
   ]);
+});
+
+test('reports an unexpected failure instead of rejecting the command', async (t) => {
+  silenceConsoleErrors(t);
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-unexpected-failure');
+  const host = createVscode(workspaceRoot, 'problems.md');
+  host.vscode.languages.getDiagnostics = () => {
+    throw new Error('diagnostics are unavailable');
+  };
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.deepEqual(host.errorMessages, [
+    'Export Problems to Markdown failed: diagnostics are unavailable.',
+  ]);
+  assert.equal(host.writes.length, 0);
+});
+
+test('logs the original failure for the Extension Host log', async (t) => {
+  const originalConsoleError = console.error;
+  const loggedArguments: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    loggedArguments.push(args);
+  };
+  t.after(() => {
+    console.error = originalConsoleError;
+  });
+
+  const cause = new Error('diagnostics are unavailable');
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-failure-logging');
+  const host = createVscode(workspaceRoot, 'problems.md');
+  host.vscode.languages.getDiagnostics = () => {
+    throw cause;
+  };
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(loggedArguments.length, 1);
+  assert.ok(loggedArguments[0].includes(cause));
 });

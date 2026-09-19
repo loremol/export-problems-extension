@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Report a failed export in the extension's own words instead of VS Code's `Running the contributed command: 'export-problems.export' failed.`, which named neither the step that failed nor its cause. The original error, stack included, still reaches the Extension Host log.
 - Exclude the configured export target from the diagnostics an export collects, in every output mode, so a linter's complaints about a previous export no longer appear in the next one. A `save-dialog` export saved under a name other than `exportProblems.defaultFileName` is still unknown at collection time and can be reported by a later export.
 - Distinguish an empty export caused by `exportProblems.minimumSeverity` from a workspace with no problems, naming the effective threshold and the number of diagnostics it excluded instead of reporting `No problems found in workspace.`
 
