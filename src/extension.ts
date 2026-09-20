@@ -2,18 +2,18 @@ import * as vscode from 'vscode';
 import { formatExportFailure } from './exportErrors';
 import { exportProblemsToMarkdown } from './exportProblemsToMarkdown';
 
-// Runs the export, reporting a failure rather than leaving VS Code to report a failed command
+// Run the export and report failures instead of leaving VS Code with a rejected command.
 async function runExportCommand(): Promise<void> {
   try {
     await exportProblemsToMarkdown();
   } catch (error) {
-    // The notification carries one line, so the raw error keeps the stack in the Extension Host log.
+    // Notifications use one line. Logging the raw error preserves the stack in the Extension Host log.
     console.error('Export Problems to Markdown failed', error);
     vscode.window.showErrorMessage(formatExportFailure(error));
   }
 }
 
-// Registers the export command with the extension host
+// Register the command when VS Code activates the extension.
 export function activate(
   context: Pick<vscode.ExtensionContext, 'subscriptions'>
 ): void {
@@ -22,5 +22,5 @@ export function activate(
   );
 }
 
-// Provides the extension host's optional deactivation hook
+// VS Code calls this optional hook when deactivating the extension.
 export function deactivate(): void { }

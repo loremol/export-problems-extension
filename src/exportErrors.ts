@@ -1,7 +1,7 @@
-// The longest cause text a notification carries before it is abbreviated
+// Maximum cause length before a notification abbreviates it.
 const maximumCauseLength = 300;
 
-// Returns true when a thrown value carries a string code, as both Node and VS Code errors do
+// Check for the string error codes used by Node and VS Code.
 function hasErrorCode(error: unknown): error is { code: string } {
   return (
     typeof error === 'object' &&
@@ -11,7 +11,7 @@ function hasErrorCode(error: unknown): error is { code: string } {
   );
 }
 
-// Fits cause text and its code suffix into a single readable notification line
+// Keep the cause and code suffix within the notification limit.
 function formatCauseText(value: string, suffix = ''): string {
   const combined = `${value}${suffix}`;
   if (combined.length <= maximumCauseLength) {
@@ -25,12 +25,12 @@ function formatCauseText(value: string, suffix = ''): string {
   return `${value.slice(0, maximumCauseLength - suffix.length - 1)}…${suffix}`;
 }
 
-// Ends a sentence, leaving text that already ends in terminal punctuation alone
+// Add terminal punctuation when the text does not already have it.
 export function endSentence(text: string): string {
   return /[.!?…]$/.test(text) ? text : `${text}.`;
 }
 
-// Names the cause of a failure in a form worth showing in a notification
+// Turn a thrown value into useful notification text.
 export function describeError(error: unknown): string {
   const code = hasErrorCode(error) ? error.code : '';
   const message = (error instanceof Error ? error.message : String(error))
@@ -46,7 +46,7 @@ export function describeError(error: unknown): string {
   return formatCauseText(message, codeSuffix);
 }
 
-// Marks a failure that already names the export step it interrupted
+// Wrap an error with the name of the export step that failed.
 export class ExportStepError extends Error {
   constructor(readonly step: string, cause: unknown) {
     super(`${step}: ${describeError(cause)}`, { cause });
@@ -54,7 +54,7 @@ export class ExportStepError extends Error {
   }
 }
 
-// Runs an export step, tagging any failure with the step it interrupted
+// Run one export step and attach its name to any error.
 export async function runExportStep<T>(
   step: string,
   operation: () => T | PromiseLike<T>
@@ -66,7 +66,7 @@ export async function runExportStep<T>(
   }
 }
 
-// Phrases an export failure for a notification
+// Format an export error for a notification.
 export function formatExportFailure(error: unknown): string {
   return error instanceof ExportStepError
     ? endSentence(`Could not ${error.step}: ${describeError(error.cause)}`)

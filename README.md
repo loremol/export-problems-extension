@@ -3,19 +3,16 @@
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/loremol.export-problems-to-markdown.svg)](https://marketplace.visualstudio.com/items?itemName=loremol.export-problems-to-markdown)
 [![Open VSX Registry](https://img.shields.io/open-vsx/v/loremol/export-problems-to-markdown?label=Open%20VSX)](https://open-vsx.org/extension/loremol/export-problems-to-markdown)
 
-Export everything from the VS Code / VSCodium "Problems" panel to a Markdown file with customizable filtering, grouping and export options.
+Export diagnostics from the VS Code or VSCodium Problems panel to a Markdown file. You can choose which problems to include, how to group them, and where to save the result.
 
 ## Features
-- Exports all diagnostics (errors, warnings, info, hints) across the whole workspace.
-- Each entry shows line:column, severity, source, code, and message.
-- Configurable layout: group by file, group by severity, or by a single flat table.
-- Configurable output:
-    1. specify the output every time with save dialog
-    2. automatic file write in the workspace
-    3. copy to the clipboard
-- Filter by minimum severity, and toggle the header block, source/code tags, and column numbers.
-- Insecure paths submitted by the user are rejected and prompt a new save dialog
-- With multiple workspaces open in the same window, it includes workspace folder names in file paths
+- Export errors, warnings, information, and hints from the entire workspace.
+- Include the line and column, severity, source, code, and message for each problem.
+- Group problems by file or severity, or place them in a single table.
+- Send the output to a location chosen in a save dialog, write it to the workspace automatically, or copy it to the clipboard.
+- Set a minimum severity and choose whether to include the header, source and code tags, or column numbers.
+- Reject unsafe user-provided paths and open a new save dialog instead.
+- Include workspace folder names in file paths when the window contains multiple workspace folders.
 
 See [Settings](#settings) for all options.
 
@@ -23,13 +20,20 @@ See [Settings](#settings) for all options.
 1. Open the Command Palette
 2. Run **Export Problems to Markdown**.
 
-Example output produced:
+Example output with the default settings:
 
 ```markdown
-# src/index.ts
+# Problems
+
+## src/index.ts
+
 - **Line 12:5** Error [ts, 2322]: Type 'string' is not assignable to type 'number'.
 - **Line 30:1** Warning [eslint, no-unused-vars]: 'foo' is declared but never used.
 ```
+
+The `# Problems` title comes from `exportProblems.includeSummary` and
+`exportProblems.summaryTitle`. Turning the summary off promotes the file heading
+to `# src/index.ts`.
 
 ## Settings
 | Setting | Type | Default |
@@ -46,20 +50,12 @@ Example output produced:
 | `exportProblems.outputMode` | `save-dialog` \| `workspace-file` \| `clipboard` | `save-dialog` |
 | `exportProblems.openAfterExport` | `boolean` | `true` |
 
-### Grouping (`groupBy`)
+### Grouping with `groupBy`
 - `file`: one heading per file (`## <path>` by default beneath the summary, or `# <path>` when it is disabled).
 - `severity`: one heading per severity (`## Errors` by default beneath the summary, or `# Errors` when it is disabled), with the file path in each entry.
 - `flat-table`: a single Markdown table, one row per diagnostic.
 
-## When an export fails
-- A failure names the step it stopped at and the reason given — for example
-  `Could not write the export to reports/problems.md: Unable to write file (NoPermissions).`
-  The full error, stack included, is in the Extension Host log
-  (**Help → Toggle Developer Tools → Console**).
-- If the report is written but cannot be opened, the export is still confirmed and the file is on
-  disk — the confirmation becomes a warning that says why it could not be opened.
-
-## Development
+## Development commands
 - `npm ci`
 - `npm run compile`
 - `npm test`

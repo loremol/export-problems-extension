@@ -29,22 +29,22 @@ const severityOrder: vscode.DiagnosticSeverity[] = [
   vscode.DiagnosticSeverity.Hint,
 ];
 
-// DiagnosticSeverity is a TypeScript enum, so it constrains nothing at runtime and diagnostics
-// reaching us from other extensions can carry a severity outside the four declared values.
+// TypeScript erases enum constraints at runtime. Diagnostics from other extensions can therefore
+// carry a severity outside the four declared values.
 const unknownSeverityLabel = 'Unknown severity';
 const unknownSeverityHeading = 'Unknown severities';
 
-// Returns true when a severity is one of the four values VS Code declares
+// Check whether VS Code declares this severity.
 function isKnownSeverity(severity: vscode.DiagnosticSeverity): boolean {
   return severityOrder.includes(severity);
 }
 
-// Names a severity, falling back to a shared label for values outside the declared range
+// Use a shared fallback label for severities outside the declared range.
 function formatSeverityLabel(severity: vscode.DiagnosticSeverity): string {
   return isKnownSeverity(severity) ? severityLabels[severity] : unknownSeverityLabel;
 }
 
-// Orders the severity layout's sections, collecting unrecognized severities in a trailing one
+// Put known severity sections first and collect unrecognized values in the last section.
 const severitySections: ReadonlyArray<{
   heading: string;
   includesSeverity: (severity: vscode.DiagnosticSeverity) => boolean;
@@ -66,7 +66,7 @@ const severityThresholds: Record<string, vscode.DiagnosticSeverity> = {
   Hint: vscode.DiagnosticSeverity.Hint,
 };
 
-// Resolves a configured severity name, ignoring names inherited from Object.prototype
+// Look up configured severity names without reading inherited properties.
 function readSeverityThreshold(severityName: string): vscode.DiagnosticSeverity {
   return Object.hasOwn(severityThresholds, severityName)
     ? severityThresholds[severityName]
@@ -99,7 +99,7 @@ type OutputTarget =
     }
   | { kind: 'selected'; uri: vscode.Uri };
 
-// Reads a string setting, falling back to its default when the stored value is not a string
+// Read a string setting, or use its default when the stored value has another type.
 function readStringSetting<T extends string>(
   config: vscode.WorkspaceConfiguration,
   section: string,
@@ -110,7 +110,7 @@ function readStringSetting<T extends string>(
   return typeof value === 'string' ? (value as T) : defaultValue;
 }
 
-// Reads the configured export options
+// Load the export options from the workspace configuration.
 function readOptions(): ExportOptions {
   const config = vscode.workspace.getConfiguration('exportProblems');
   const minimumSeverityName = readStringSetting(config, 'minimumSeverity', 'Hint');
@@ -131,12 +131,12 @@ function readOptions(): ExportOptions {
   };
 }
 
-// Returns true if there is more than one workspace open in the same window
+// Relative paths need folder names when the window contains multiple workspaces.
 function hasMultipleWorkspaceFolders(): boolean {
   return (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
 }
 
-// Resolves every path the configured export target names, since a symlinked root makes lexical and canonical differ
+// Resolve both target paths because a symlinked workspace has different lexical and canonical roots.
 async function resolveExportTargetPaths(options: ExportOptions): Promise<string[]> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder || workspaceFolder.uri.scheme !== 'file') {
@@ -154,7 +154,7 @@ async function resolveExportTargetPaths(options: ExportOptions): Promise<string[
     : [lexicalPath];
 }
 
-// Returns true when a diagnostic's file is the export's own output file
+// Check whether a diagnostic belongs to the export file itself.
 function isExportTargetUri(
   uri: vscode.Uri,
   exportTargetPaths: readonly string[]
@@ -165,7 +165,7 @@ function isExportTargetUri(
   );
 }
 
-// Collects diagnostics that meet the threshold, in stable path and position order
+// Keep diagnostics at the configured threshold and sort them by path and position.
 function collectFilteredDiagnosticEntries(
   threshold: vscode.DiagnosticSeverity,
   includeWorkspaceFolderName: boolean,
@@ -177,8 +177,7 @@ function collectFilteredDiagnosticEntries(
     .map(([uri, diagnostics]): DiagnosticEntry => [
       uri,
       diagnostics
-        // An unrecognized severity cannot be ordered against the threshold, so it is always kept
-        // rather than being dropped or retained depending on which side of the range it falls on.
+        // Unknown severities have no meaningful threshold order, so keep all of them.
         .filter(
           (diagnostic) =>
             !isKnownSeverity(diagnostic.severity) || diagnostic.severity <= threshold
@@ -197,7 +196,7 @@ function collectFilteredDiagnosticEntries(
     });
 }
 
-// Collects every diagnostic the workspace reports, whatever the configured threshold
+// Collect every workspace diagnostic regardless of the configured threshold.
 function collectAllDiagnosticEntries(
   includeWorkspaceFolderName: boolean,
   exportTargetPaths: readonly string[]
@@ -209,7 +208,7 @@ function collectAllDiagnosticEntries(
   );
 }
 
-// Returns the diagnostics the threshold removed, diffed by identity so both collections must share a tick
+// Find diagnostics removed by the threshold. The identity comparison requires both lists from the same tick.
 function findHiddenDiagnosticEntries(
   allEntries: DiagnosticEntry[],
   filteredEntries: DiagnosticEntry[]
@@ -229,12 +228,12 @@ function findHiddenDiagnosticEntries(
     .filter(([, diagnostics]) => diagnostics.length > 0);
 }
 
-// Names a countable noun, pluralizing it for every count but one
+// Use the singular form only when the count is one.
 function pluralize(count: number, noun: string): string {
   return count === 1 ? noun : `${noun}s`;
 }
 
-// Describes the diagnostics the threshold hid, or nothing when the export is complete
+// Describe diagnostics hidden by the threshold, or return nothing for a complete export.
 function formatHiddenDiagnosticsNotice(
   hiddenEntries: DiagnosticEntry[],
   minimumSeverityName: string
@@ -257,13 +256,13 @@ function formatHiddenDiagnosticsNotice(
   );
 }
 
-// Exports the current workspace diagnostics as Markdown
+// Export the current workspace diagnostics as Markdown.
 export async function exportProblemsToMarkdown(): Promise<void> {
   const options = readOptions();
   const includeWorkspaceFolderName = hasMultipleWorkspaceFolders();
   const exportTargetPaths = await resolveExportTargetPaths(options);
-  // The two collections below must stay adjacent and synchronous with respect to each other —
-  // see the same-tick identity constraint documented on findHiddenDiagnosticEntries.
+  // Keep these calls adjacent and synchronous. findHiddenDiagnosticEntries compares object
+  // identities, which are stable only within the same tick.
   const entries = collectFilteredDiagnosticEntries(
     options.threshold,
     includeWorkspaceFolderName,
@@ -291,7 +290,7 @@ export async function exportProblemsToMarkdown(): Promise<void> {
   await deliverMarkdown(content, options, hiddenNotice);
 }
 
-// Sends generated Markdown to the configured destination
+// Send the generated Markdown to the configured destination.
 async function deliverMarkdown(
   content: string,
   options: ExportOptions,
@@ -341,7 +340,7 @@ async function deliverMarkdown(
   }
 }
 
-// Resolves automatic workspace output or a user-selected destination
+// Choose between automatic workspace output and a user-selected destination.
 async function selectOutputTarget(options: ExportOptions): Promise<OutputTarget | undefined> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
@@ -383,7 +382,7 @@ async function selectOutputTarget(options: ExportOptions): Promise<OutputTarget 
   return selectedUri ? { kind: 'selected', uri: selectedUri } : undefined;
 }
 
-// Opens the Markdown export save dialog
+// Open the save dialog for a Markdown export.
 function showMarkdownSaveDialog(
   defaultUri?: vscode.Uri
 ): Promise<vscode.Uri | undefined> {
@@ -396,12 +395,12 @@ function showMarkdownSaveDialog(
   );
 }
 
-// Joins a completion message to a hidden-diagnostics notice, omitting an empty one
+// Append the hidden-diagnostics notice when there is one.
 function appendHiddenNotice(message: string, hiddenNotice: string): string {
   return hiddenNotice ? `${message} ${hiddenNotice}` : message;
 }
 
-// Writes Markdown to a user-selected URI
+// Write Markdown to the URI selected by the user.
 async function writeMarkdownFile(
   targetUri: vscode.Uri,
   content: string,
@@ -415,7 +414,7 @@ async function writeMarkdownFile(
   await completeMarkdownFileExport(targetUri, openAfterExport, hiddenNotice);
 }
 
-// Opens a written export, returning a notice when it cannot be shown
+// Open a written export and return a notice if VS Code cannot show it.
 async function tryOpenExport(targetUri: vscode.Uri): Promise<string> {
   try {
     const document = await vscode.workspace.openTextDocument(targetUri);
@@ -428,7 +427,7 @@ async function tryOpenExport(targetUri: vscode.Uri): Promise<string> {
   }
 }
 
-// Reports a completed file export, opening it first when configured
+// Open the file when requested, then report the completed export.
 async function completeMarkdownFileExport(
   targetUri: vscode.Uri,
   openAfterExport: boolean,
@@ -448,7 +447,7 @@ async function completeMarkdownFileExport(
   vscode.window.showInformationMessage(message);
 }
 
-// Builds the complete Markdown export by choosing the right strategy based on options
+// Build the complete Markdown document with the selected grouping.
 function buildMarkdown(
   entries: DiagnosticEntry[],
   includeWorkspaceFolderName: boolean,
@@ -486,12 +485,12 @@ function buildMarkdown(
   return lines.join('\n');
 }
 
-// Formats a group heading at the appropriate document level
+// Use a second-level heading when the document already has a summary title.
 function formatGroupHeading(title: string, includeSummary: boolean): string {
   return `${includeSummary ? '##' : '#'} ${title}`;
 }
 
-// Builds Markdown grouped by file
+// Build sections grouped by file.
 function buildByFile(
   entries: DiagnosticEntry[],
   includeWorkspaceFolderName: boolean,
@@ -513,7 +512,7 @@ function buildByFile(
   return lines;
 }
 
-// Builds Markdown grouped by severity
+// Build sections grouped by severity.
 function buildBySeverity(
   entries: DiagnosticEntry[],
   includeWorkspaceFolderName: boolean,
@@ -551,7 +550,7 @@ function buildBySeverity(
   return lines;
 }
 
-// Builds diagnostics as a single Markdown table
+// Build one Markdown table containing every diagnostic.
 function buildFlatTable(
   entries: DiagnosticEntry[],
   includeWorkspaceFolderName: boolean,
@@ -588,7 +587,7 @@ function buildFlatTable(
   return lines;
 }
 
-// Formats a diagnostic's one-based line and optional column
+// Format the one-based line number and optional column.
 function formatLocation(diagnostic: vscode.Diagnostic, includeColumn: boolean): string {
   const line = diagnostic.range.start.line + 1;
   if (!includeColumn) {
@@ -598,7 +597,7 @@ function formatLocation(diagnostic: vscode.Diagnostic, includeColumn: boolean): 
   return `${line}:${column}`;
 }
 
-// Formats a diagnostic's available source and code
+// Format whichever source and code fields the diagnostic provides.
 function formatSourceAndCode(
   diagnostic: vscode.Diagnostic,
   escapeText: (value: string) => string
@@ -614,7 +613,7 @@ function formatSourceAndCode(
   return parts.join(', ');
 }
 
-// Formats a diagnostic source and code as an inline tag
+// Format the diagnostic source and code as an inline tag.
 function formatSourceTag(diagnostic: vscode.Diagnostic, includeSource: boolean): string {
   if (!includeSource) {
     return '';
@@ -623,12 +622,12 @@ function formatSourceTag(diagnostic: vscode.Diagnostic, includeSource: boolean):
   return sourceAndCode ? ` [${sourceAndCode}]` : '';
 }
 
-// Collapses line breaks for inline Markdown output
+// Collapse line breaks before inserting text into inline Markdown.
 function formatInlineText(value: string): string {
   return value.replace(/[\r\n]+/g, ' ');
 }
 
-// Formats text for use in a Markdown table cell
+// Escape text for use in a Markdown table cell.
 function formatTableCell(value: string): string {
   return formatInlineText(value).replace(
     /(\\*)\|/g,
@@ -636,12 +635,12 @@ function formatTableCell(value: string): string {
   );
 }
 
-// Normalizes untyped diagnostic text, since diagnostics come from other extensions and could be incorrectly typed
+// Normalize diagnostic text because other extensions can supply values with the wrong type.
 function toText(value: unknown): string {
   return String(value);
 }
 
-// Normalizes a diagnostic code to text, tolerating the null untyped providers can emit
+// Normalize a diagnostic code to text, including null from untyped providers.
 function formatCode(code: vscode.Diagnostic['code'] | null): string {
   if (code === undefined || code === null) {
     return '';

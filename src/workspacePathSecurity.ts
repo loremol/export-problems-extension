@@ -18,7 +18,7 @@ const defaultExportFileName = 'problems.md';
 const invalidPortableFileNameCharacter = /[\u0000-\u001f<>:"/\\|?*]/;
 const windowsReservedFileName = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
 
-// Returns a portable file name for save-dialog fallback
+// Derive a portable file name for the save-dialog fallback.
 export function getSafeDialogFileName(configuredPath: string): string {
   const fileName = path.win32.basename(path.posix.basename(configuredPath));
   if (
@@ -38,7 +38,7 @@ export type WorkspaceFileTarget =
   | { kind: 'automatic'; targetPath: string }
   | { kind: 'save-dialog'; fileName: string };
 
-// Selects automatic output for safe local targets or a save-dialog fallback
+// Use automatic output for a safe local target; otherwise require the save dialog.
 export async function selectWorkspaceFileTarget(
   workspaceScheme: string,
   workspacePath: string,
@@ -57,7 +57,7 @@ export async function selectWorkspaceFileTarget(
   };
 }
 
-// Resolves a configured path as a strict lexical workspace descendant
+// Resolve the configured path only if it is lexically inside the workspace.
 function resolveLexicalWorkspaceTarget(
   workspaceRoot: string,
   configuredPath: string
@@ -74,7 +74,7 @@ function resolveLexicalWorkspaceTarget(
   };
 }
 
-// Returns a path's canonical form, or undefined when resolution fails
+// Resolve a canonical path without exposing filesystem errors to the caller.
 async function tryRealpath(targetPath: string): Promise<string | undefined> {
   try {
     return await realpath(targetPath);
@@ -83,7 +83,7 @@ async function tryRealpath(targetPath: string): Promise<string | undefined> {
   }
 }
 
-// Finds the nearest existing target path while rejecting symbolic links
+// Find the nearest existing part of the target path, rejecting symbolic links along the way.
 async function findNearestExistingTargetPath(
   lexicalRoot: string,
   targetSegments: string[]
@@ -118,7 +118,7 @@ async function findNearestExistingTargetPath(
   return { nearestExistingPath, missingSegments: [] };
 }
 
-// Rebuilds and validates a target beneath the canonical workspace root
+// Rebuild the target below the canonical workspace root and validate the result.
 function resolveCanonicalWorkspaceTarget(
   canonicalRoot: string,
   canonicalExistingPath: string,
@@ -137,7 +137,7 @@ function resolveCanonicalWorkspaceTarget(
     : undefined;
 }
 
-// Resolves a configured target only when it remains safely inside the workspace
+// Resolve the configured target only while it remains inside the workspace.
 export async function resolveSafeWorkspaceTarget(
   workspaceRoot: string,
   configuredPath: string
@@ -188,7 +188,7 @@ const unusableTargetErrorCodes = new Set([
   'EROFS',
 ]);
 
-// Returns true when an error means the target cannot be written and the caller should fall back
+// Check whether the caller should fall back because the target is unusable.
 function isUnusableTargetError(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -198,12 +198,12 @@ function isUnusableTargetError(error: unknown): boolean {
   );
 }
 
-// Returns true when two stats identify the same filesystem object
+// Compare the device and inode to confirm that both stats describe the same file.
 function isSameFile(left: Stats, right: Stats): boolean {
   return left.dev === right.dev && left.ino === right.ino;
 }
 
-// Writes only while the configured target remains a safe workspace file
+// Write only while the configured target remains a safe workspace file.
 export async function writeFileToSafeWorkspaceTarget(
   workspaceRoot: string,
   configuredPath: string,
@@ -251,8 +251,8 @@ export async function writeFileToSafeWorkspaceTarget(
       targetHandle = await open(
         targetPath,
         constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow,
-        // Leave the mode to the umask, matching both an ordinary file write and the mode an
-        // overwritten export keeps, so a report does not depend on whether the file already existed.
+        // Let the umask choose the mode, as it does for ordinary writes. Existing exports keep
+        // that same mode, so the result does not depend on whether the file already existed.
         0o666
       );
     } catch (error) {
@@ -299,7 +299,7 @@ export async function writeFileToSafeWorkspaceTarget(
   }
 }
 
-// Returns true when a target is a strict descendant of a root
+// Check whether the target is a strict descendant of the root.
 export function isPathStrictlyWithin(
   rootPath: string,
   targetPath: string,

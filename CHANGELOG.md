@@ -1,49 +1,49 @@
 # Changelog
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+This changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.2.0] - 2026-09-19
 
 ### Added
 
-- Describe a failure's cause in one notification line, naming a Node or VS Code error code only when the message does not already carry it, collapsing line breaks, and abbreviating text longer than 300 characters.
-- Report the diagnostics excluded because of `exportProblems.minimumSeverity` in the export's confirmation message, alongside a note that the Problems panel's own filter box is not applied to exports.
+- Show the cause of a failure in one notification line. Include a Node or VS Code error code only if the message does not already include it, replace line breaks with spaces, and shorten text longer than 300 characters.
+- Show how many diagnostics `exportProblems.minimumSeverity` excluded in the export confirmation. The confirmation also explains that exports ignore the Problems panel's filter box.
 
 ### Changed
 
-- Name the delivery step in a failed export's notification — copying to the clipboard, opening the save dialog, or writing to a named file — so a failure says which destination it could not reach.
-- Confirm a completed export in every output mode. Enabling `openAfterExport` previously opened the report and showed no notification at all, so the same export reported different amounts depending on its mode, and the excluded-diagnostics count went unreported in the default configuration. The confirmation message and everything appended to it no longer depend on the output mode.
+- Name the failed step in export error notifications.
+- Confirm successful exports in every output mode.
 
 ### Fixed
 
-- Confirm an export whose report was written but could not be opened, instead of reporting the whole export as failed while the finished file sat on disk. The confirmation becomes a warning naming both the written path and the reason the file could not be opened.
-- Report a failed export in the extension's own words instead of VS Code's `Running the contributed command: 'export-problems.export' failed.`, which named neither the step that failed nor its cause. The original error, stack included, still reaches the Extension Host log.
-- Exclude the configured export target from the diagnostics an export collects, in every output mode, so a linter's complaints about a previous export no longer appear in the next one. A `save-dialog` export saved under a name other than `exportProblems.defaultFileName` is still unknown at collection time and can be reported by a later export.
-- Distinguish an empty export caused by `exportProblems.minimumSeverity` from a workspace with no problems, naming the effective threshold and the number of diagnostics it excluded instead of reporting `No problems found in workspace.`
+- When a report is written but cannot be opened, show a warning instead of saying the export failed. The warning includes the file path and the reason it could not be opened.
+- Replace VS Code's `Running the contributed command: 'export-problems.export' failed.` message with one that names the failed step and its cause. The Extension Host log still receives the original error and stack.
+- Exclude the current export target from collected diagnostics in every output mode. This prevents linter errors from a previous export from appearing in the next one. If a `save-dialog` export uses a name other than `exportProblems.defaultFileName`, the extension does not know that path during collection, so a later export may still include it.
+- When `exportProblems.minimumSeverity` removes every diagnostic, report the threshold and the number excluded instead of `No problems found in workspace.`
 
 ## [1.1.3] - 2026-09-17
 
 ### Added
 
-- Expand regression coverage for out-of-range diagnostic severities across every layout and the severity threshold, non-string settings, non-string diagnostic messages and sources, `null` diagnostic codes, save-dialog file name confinement, unwritable automatic targets, and the mode of a newly created export.
+- Add regression tests for out-of-range diagnostic severities in every layout and severity threshold. Also test non-string settings, messages, and sources; `null` diagnostic codes; save-dialog file name limits; unwritable automatic targets; and permissions for new export files.
 
 ### Changed
 
-- Create new automatic `workspace-file` exports with the umask-derived mode of an ordinary file write instead of mode `0600`, so an export's permissions no longer depend on whether the file already existed.
-- Reduce the README settings and development tables to the setting names, types, and defaults, and describe multi-root exports as including workspace folder names in file paths rather than adding folder headings.
+- Give new automatic `workspace-file` exports the umask-based permissions of a normal file write instead of mode `0600`. File permissions no longer depend on whether the export file already exists.
+- Simplify the README settings and development tables to show setting names, types, and defaults. Clarify that multi-root exports include workspace folder names in file paths instead of adding folder headings.
 
 ### Fixed
 
-- Label diagnostics whose severity falls outside the range VS Code declares as `Unknown severity` and group them in a trailing section, so the summary count and the exported body no longer disagree and `undefined` no longer reaches the output. Such a diagnostic is kept regardless of the configured minimum severity, since it cannot be ordered against the threshold.
-- Fall back to the declared default for a setting that is not a string, and stringify non-string diagnostic messages and sources, so such a value no longer aborts the whole export.
-- Fall back to the `Hint` threshold for an `exportProblems.minimumSeverity` name that is not one of the four declared severities, including names inherited from `Object.prototype`.
-- Treat a `null` diagnostic code as an absent code, as untyped providers can emit one where the API declares `undefined`.
-- Fall back to save-dialog confirmation when an automatic `workspace-file` target, or a directory on the way to it, denies writing, instead of failing the export with an error.
-- End the `flat-table` layout with a trailing newline, matching the `file` and `severity` layouts.
+- Label diagnostics with a severity outside VS Code's declared range as `Unknown severity` and place them in a final group. The summary count now matches the exported content, and `undefined` no longer appears in the output. These diagnostics are included at every minimum severity because they cannot be compared with the threshold.
+- Use a setting's declared default when its value is not a string. Convert non-string diagnostic messages and sources to strings instead of failing the export.
+- Use the `Hint` threshold when `exportProblems.minimumSeverity` is not one of the four supported severity names, including names inherited from `Object.prototype`.
+- Treat a `null` diagnostic code as missing. Untyped providers may return `null` even though the API declares `undefined`.
+- Open a save dialog when an automatic `workspace-file` target or one of its parent directories is not writable, instead of failing the export.
+- Add a trailing newline to the `flat-table` layout to match the `file` and `severity` layouts.
 
 ### Security
 
-- Sanitize `exportProblems.defaultFileName` before it pre-fills the save dialog in the default `save-dialog` output mode, so a workspace setting can no longer aim the dialog outside the workspace folder.
+- Clean `exportProblems.defaultFileName` before using it to prefill the save dialog in the default `save-dialog` mode. A workspace setting can no longer point the dialog outside the workspace folder.
 
 ## [1.1.2] - 2026-09-14
 
@@ -56,64 +56,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add VS Code Marketplace and Open VSX release badges to the README.
-- Expand regression coverage for multi-root exports, severity filtering and ordering, every output layout and summary combination, save-dialog, clipboard, and `workspace-file` success and failure paths, diagnostic code formatting, Markdown escaping, and workspace target security across platforms.
+- Add regression tests for multi-root exports; severity filtering and ordering; every output layout and summary combination; save-dialog, clipboard, and `workspace-file` success and failure paths; diagnostic code formatting; Markdown escaping; and workspace target security across platforms.
 
 ### Changed
 
-- Isolate the export command from extension activation, split configuration, diagnostic collection, Markdown generation, target selection, delivery, and completion into documented helpers, and remove a redundant diagnostic-array copy.
-- Extracted methods from document workspace target resolution into lexical, existing-path, and canonical validation steps.
+- Separate the export command from extension activation. Split configuration, diagnostic collection, Markdown generation, target selection, delivery, and completion into documented helpers. Remove an unnecessary copy of the diagnostic array.
+- Split workspace target resolution into lexical, existing-path, and canonical validation steps.
 - Rename the export workflow test suite and npm test target from `extension` to `exportProblemsToMarkdown`.
 
 ### Fixed
 
-- Prevent stale compiled JavaScript from being included in packaged extensions by cleaning the output directory before each build.
-- Preserve backslash-prefixed pipes as literal content inside flat Markdown table cells.
+- Clean the output directory before each build so packaged extensions do not include old compiled JavaScript.
+- Keep backslash-prefixed pipes as literal text inside flat Markdown table cells.
 - Create missing parent directories for automatic `workspace-file` exports.
 
 ### Security
 
-- Reject automatic export targets that are directories, contain non-directory parent components, or are files with multiple hard links, falling back to save-dialog confirmation.
-- Bind automatic target validation to the file write by revalidating after parent creation and file opening, refusing symbolic-link traversal, confirming that the opened descriptor still identifies the validated single-link file, and writing through that descriptor.
-- Create new automatic export files exclusively with mode `0600` where supported, and fall back to a save dialog when the filesystem changes during validation or opening.
+- Reject automatic export targets that are directories, have a non-directory parent, or are files with multiple hard links. Use a save dialog instead.
+- Revalidate automatic targets after creating parent directories and opening the file. Reject symbolic-link traversal, check that the open file descriptor still points to the validated single-link file, and write through that descriptor.
+- Create new automatic export files with mode `0600` where supported. Open a save dialog if the filesystem changes during validation or while opening the file.
 
 ## [1.1.0] - 2026-09-13
 
 ### Added
 
-- Add settings to customize the summary title and independently toggle its export date and problem count.
+- Add settings for the summary title and separate settings for its export date and problem count.
 
 ### Changed
 
-- Include the summary title by default while omitting its export date and problem count.
-- Promote file and severity group headings to H1 when the summary is omitted, while retaining H2 beneath an included summary.
+- Show the summary title by default, but hide its export date and problem count.
+- Use H1 file and severity headings when the summary is hidden, and H2 headings when it is shown.
 
 ## [1.0.0] - 2026-09-11
 
 ### Added
 
-- Automated regression tests for Markdown generation and secure `workspace-file` target handling.
+- Add regression tests for Markdown generation and secure `workspace-file` target handling.
 
 ### Changed
 
-- `workspace-file` mode now opens a save dialog instead of writing silently when the configured target cannot be verified as safe.
+- In `workspace-file` mode, open a save dialog when the configured target cannot be verified as safe instead of writing to it automatically.
 
 ### Security
 
-- Restrict automatic exports to canonical targets strictly beneath local workspaces, rejecting path traversal and existing symbolic-link components.
-- Collapse line breaks in file paths, diagnostic messages, sources, and codes, and escape pipes inside `flat-table` cells, so such input cannot forge a heading or split a table row.
+- Allow automatic exports only to canonical paths inside local workspaces. Reject path traversal and existing symbolic-link path components.
+- Replace line breaks in file paths, diagnostic messages, sources, and codes with spaces. Escape pipes inside `flat-table` cells. This prevents input from creating a false heading or extra table row.
 
 ## [0.0.1] - 2026-07-12
 
 ### Added
 
-- `Export Problems to Markdown` command that exports all workspace diagnostics
-  (errors, warnings, info, hints) from the Problems panel to a Markdown file.
-- Settings:
-  - `exportProblems.minimumSeverity` — minimum severity to include.
-  - `exportProblems.groupBy` — `file`, `severity`, or `flat-table` output layout.
-  - `exportProblems.includeSummary` — toggle the title/timestamp/count header block.
-  - `exportProblems.includeSource` — toggle the `[source, code]` tag.
-  - `exportProblems.includeColumn` — toggle column numbers in locations.
-  - `exportProblems.defaultFileName` — default export file name.
-  - `exportProblems.outputMode` — `save-dialog`, `workspace-file`, or `clipboard`.
-  - `exportProblems.openAfterExport` — open the exported file after writing.
+- Add the `Export Problems to Markdown` command. It exports all workspace diagnostics (errors, warnings, info, and hints) from the Problems panel to a Markdown file.
+- Add these settings:
+  - `exportProblems.minimumSeverity`: minimum severity to include.
+  - `exportProblems.groupBy`: `file`, `severity`, or `flat-table` output layout.
+  - `exportProblems.includeSummary`: show or hide the title, timestamp, and count header.
+  - `exportProblems.includeSource`: show or hide the `[source, code]` tag.
+  - `exportProblems.includeColumn`: show or hide column numbers in locations.
+  - `exportProblems.defaultFileName`: default export file name.
+  - `exportProblems.outputMode`: `save-dialog`, `workspace-file`, or `clipboard`.
+  - `exportProblems.openAfterExport`: open the exported file after writing.
