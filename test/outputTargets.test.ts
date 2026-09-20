@@ -100,3 +100,33 @@ test('exports an untitled buffer whose path matches the export target', async (t
   assert.ok(written.includes('Unsaved buffer problem'));
   assert.ok(!written.includes('Stale problem from the previous export'));
 });
+
+test('keeps problems at the configured export path when the workspace is not on the local file system', async () => {
+  const remoteRoot = path.join(path.sep, 'remote', 'workspace');
+  const selectedUri = new TestUri('vscode-remote', path.join(remoteRoot, 'problems.md'));
+  const host = createVscode(remoteRoot, 'problems.md', {
+    configuration: { outputMode: 'workspace-file', openAfterExport: false, includeSummary: false },
+    saveDialogResult: selectedUri,
+    // A local file can share the export name while the workspace itself is remote.
+    diagnosticEntries: [
+      [TestUri.file(path.join(remoteRoot, 'problems.md')), [{
+        severity: 0,
+        range: createRange(),
+        message: 'Problem in a local file that shares the export name',
+      }]],
+    ],
+  });
+  host.vscode.workspace.workspaceFolders = [{
+    uri: new TestUri('vscode-remote', remoteRoot),
+    name: 'workspace',
+    index: 0,
+  }];
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const written = Buffer.from(host.writes[0].content).toString('utf8');
+  assert.ok(written.includes('Problem in a local file that shares the export name'));
+  assert.deepEqual(host.errorMessages, []);
+});
