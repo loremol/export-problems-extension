@@ -44,8 +44,10 @@ test('does not open the export in the clipboard output mode', async () => {
   assert.deepEqual(host.informationMessages, ['Problems exported to clipboard.']);
 });
 
-test('requires the save dialog for a workspace that is not on the local file system', async () => {
-  const remoteRoot = path.join(path.sep, 'remote', 'workspace');
+test('requires the save dialog for a workspace that is not on the local file system', async (t) => {
+  // A real local directory: only the scheme, not a missing path, may force the dialog.
+  const remoteRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-remote-'));
+  t.after(() => rm(remoteRoot, { recursive: true, force: true }));
   const selectedUri = new TestUri('vscode-remote', path.join(remoteRoot, 'problems.md'));
   const host = createVscode(remoteRoot, 'problems.md', {
     configuration: { outputMode: 'workspace-file', openAfterExport: false },
@@ -126,6 +128,7 @@ test('keeps problems at the configured export path when the workspace is not on 
 
   await host.getRegisteredCommand()();
 
+  assert.equal(host.writes.length, 1);
   const written = Buffer.from(host.writes[0].content).toString('utf8');
   assert.ok(written.includes('Problem in a local file that shares the export name'));
   assert.deepEqual(host.errorMessages, []);

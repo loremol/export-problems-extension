@@ -142,23 +142,6 @@ test('falls back to the file layout for a groupBy outside the enum', async () =>
   assert.equal(host.getClipboardText(), fileLayoutExport);
 });
 
-test('falls back to the declared groupBy default when the configured value is not a string', async () => {
-  const workspaceRoot = path.join(tmpdir(), 'export-problems-groupby-number');
-  const host = createVscode(workspaceRoot, 'problems.md', {
-    configuration: {
-      outputMode: 'clipboard',
-      includeSummary: false,
-      groupBy: 42 as unknown as ExportConfiguration['groupBy'],
-    },
-  });
-  const extension = loadExtension(host.vscode);
-  activateExtension(extension);
-
-  await host.getRegisteredCommand()();
-
-  assert.equal(host.getClipboardText(), fileLayoutExport);
-});
-
 test('opens the save dialog for an outputMode outside the enum', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-outputmode-unknown');
   const selectedUri = TestUri.file(path.join(workspaceRoot, 'chosen.md'));

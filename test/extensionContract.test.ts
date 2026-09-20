@@ -8,7 +8,7 @@ import {
   type ExportConfiguration,
   loadExtension,
 } from './exportHost';
-import { TestUri } from './vscodeMock';
+import { createRange, TestUri } from './vscodeMock';
 
 test('registers the command id contributed by the manifest', () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-command-id');
@@ -98,19 +98,36 @@ test('declares the enum values the export code accepts', () => {
   ]);
 });
 
+// freeze the generated timestamp so a slow run can't flake, while keeping the line present for includeExportDate drift detection.
+function normalizeExportDate(content: string): string {
+  return content.replace(/Generated: .*/, 'Generated: <normalized>');
+}
+
 test('applies the same defaults the manifest declares', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-manifest-defaults');
   const selectedUri = TestUri.file(path.join(workspaceRoot, 'picked.md'));
+  // A source/code diagnostic and a below-Error one so includeSource and minimumSeverity drift also change the output.
+  const diagnostics = [
+    {
+      severity: 0,
+      range: createRange(),
+      message: 'Example problem',
+      source: 'eslint',
+      code: 'no-unused-vars',
+    },
+    { severity: 3, range: createRange(1), message: 'Hint problem' },
+  ];
 
-  // An undefined stored value makes the mock return whatever default readOptions passes, so this
-  // run is driven entirely by the literals in readOptions.
+  // getConfiguration() bakes in non-default outputMode/openAfterExport, so explicit undefined here lets readOptions' own literals drive the run.
   const codeDefaults = createVscode(workspaceRoot, undefined, {
     configuration: { outputMode: undefined, openAfterExport: undefined },
     saveDialogResult: selectedUri,
+    diagnostics,
   });
   const manifestDefaults = createVscode(workspaceRoot, undefined, {
     configuration: readDeclaredDefaults(),
     saveDialogResult: selectedUri,
+    diagnostics,
   });
 
   for (const host of [codeDefaults, manifestDefaults]) {
@@ -119,9 +136,11 @@ test('applies the same defaults the manifest declares', async () => {
     await host.getRegisteredCommand()();
   }
 
+  assert.equal(manifestDefaults.writes.length, 1);
+  assert.equal(codeDefaults.writes.length, 1);
   assert.equal(
-    Buffer.from(manifestDefaults.writes[0].content).toString('utf8'),
-    Buffer.from(codeDefaults.writes[0].content).toString('utf8')
+    normalizeExportDate(Buffer.from(manifestDefaults.writes[0].content).toString('utf8')),
+    normalizeExportDate(Buffer.from(codeDefaults.writes[0].content).toString('utf8'))
   );
   assert.deepEqual(
     manifestDefaults.saveDialogs[0].defaultUri?.fsPath,

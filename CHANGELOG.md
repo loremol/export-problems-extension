@@ -2,6 +2,16 @@
 
 This changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add regression tests for non-boolean settings, the command registration and manifest-default contract, `groupBy` and `outputMode` values outside their declared enums, and the save dialog for folderless and remote workspaces.
+
+### Fixed
+
+- Use a setting's declared default when its value is not a boolean. A boolean setting stored as another type, such as the string `"true"`, previously behaved as enabled; it now falls back to its declared default the same way the extension's string settings already do.
+
 ## [1.2.0] - 2026-09-19
 
 ### Added
