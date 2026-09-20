@@ -126,7 +126,7 @@
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
     "compile": "npm run clean && tsc -p ./",
     "compile:test": "tsc -p ./test/tsconfig.json",
-    "test": "npm run compile && npm run compile:test && node --test .test-out/test/exportErrors.test.js .test-out/test/exportProblemsToMarkdown.test.js .test-out/test/workspacePathSecurity.test.js .test-out/test/extensionContract.test.js",
+    "test": "npm run compile && npm run compile:test && node --test .test-out/test/exportErrors.test.js .test-out/test/exportProblemsToMarkdown.test.js .test-out/test/workspacePathSecurity.test.js .test-out/test/extensionContract.test.js .test-out/test/configurationFallbacks.test.js",
     "watch": "tsc -watch -p ./",
     "package": "npx @vscode/vsce package"
   },

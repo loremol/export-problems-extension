@@ -110,6 +110,17 @@ function readStringSetting<T extends string>(
   return typeof value === 'string' ? (value as T) : defaultValue;
 }
 
+// Read a boolean setting, or use its default when the stored value has another type.
+function readBooleanSetting(
+  config: vscode.WorkspaceConfiguration,
+  section: string,
+  defaultValue: boolean
+): boolean {
+  // VS Code stores settings verbatim, so a declared "boolean" can still read back as any JSON value.
+  const value = config.get<unknown>(section, defaultValue);
+  return typeof value === 'boolean' ? value : defaultValue;
+}
+
 // Load the export options from the workspace configuration.
 function readOptions(): ExportOptions {
   const config = vscode.workspace.getConfiguration('exportProblems');
@@ -119,15 +130,15 @@ function readOptions(): ExportOptions {
     threshold,
     minimumSeverityName: severityLabels[threshold],
     groupBy: readStringSetting<ExportOptions['groupBy']>(config, 'groupBy', 'file'),
-    includeSummary: config.get<boolean>('includeSummary', true),
+    includeSummary: readBooleanSetting(config, 'includeSummary', true),
     summaryTitle: readStringSetting(config, 'summaryTitle', 'Problems'),
-    includeExportDate: config.get<boolean>('includeExportDate', false),
-    includeProblemCount: config.get<boolean>('includeProblemCount', false),
-    includeSource: config.get<boolean>('includeSource', true),
-    includeColumn: config.get<boolean>('includeColumn', true),
+    includeExportDate: readBooleanSetting(config, 'includeExportDate', false),
+    includeProblemCount: readBooleanSetting(config, 'includeProblemCount', false),
+    includeSource: readBooleanSetting(config, 'includeSource', true),
+    includeColumn: readBooleanSetting(config, 'includeColumn', true),
     defaultFileName: readStringSetting(config, 'defaultFileName', 'problems.md'),
     outputMode: readStringSetting<ExportOptions['outputMode']>(config, 'outputMode', 'save-dialog'),
-    openAfterExport: config.get<boolean>('openAfterExport', true),
+    openAfterExport: readBooleanSetting(config, 'openAfterExport', true),
   };
 }
 
