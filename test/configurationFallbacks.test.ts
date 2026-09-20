@@ -142,7 +142,7 @@ test('falls back to the file layout for a groupBy outside the enum', async () =>
   assert.equal(host.getClipboardText(), fileLayoutExport);
 });
 
-test('falls back to the file layout for a non-string groupBy', async () => {
+test('falls back to the declared groupBy default when the configured value is not a string', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-groupby-number');
   const host = createVscode(workspaceRoot, 'problems.md', {
     configuration: {
