@@ -4,6 +4,8 @@ This changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-21
+
 ### Added
 
 - Add regression tests for non-boolean settings, the command registration and manifest-default contract, `groupBy` and `outputMode` values outside their declared enums, and the save dialog for folderless and remote workspaces.
