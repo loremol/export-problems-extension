@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import { TestUri } from './vscodeMock';
+import { createRange, TestUri } from './vscodeMock';
 import { activateExtension, createVscode, loadExtension } from './exportHost';
 
 test('opens the save dialog without a default location when no folder is open', async () => {
@@ -41,4 +42,61 @@ test('does not open the export in the clipboard output mode', async () => {
   assert.equal(host.shownDocuments.length, 0);
   assert.equal(host.writes.length, 0);
   assert.deepEqual(host.informationMessages, ['Problems exported to clipboard.']);
+});
+
+test('requires the save dialog for a workspace that is not on the local file system', async () => {
+  const remoteRoot = path.join(path.sep, 'remote', 'workspace');
+  const selectedUri = new TestUri('vscode-remote', path.join(remoteRoot, 'problems.md'));
+  const host = createVscode(remoteRoot, 'problems.md', {
+    configuration: { outputMode: 'workspace-file', openAfterExport: false },
+    saveDialogResult: selectedUri,
+  });
+  host.vscode.workspace.workspaceFolders = [{
+    uri: new TestUri('vscode-remote', remoteRoot),
+    name: 'workspace',
+    index: 0,
+  }];
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.saveDialogs.length, 1);
+  assert.equal(host.saveDialogs[0].defaultUri?.scheme, 'vscode-remote');
+  assert.equal(
+    host.saveDialogs[0].defaultUri?.fsPath,
+    path.join(remoteRoot, 'problems.md')
+  );
+  assert.deepEqual(host.writes.map((write) => write.uri.fsPath), [selectedUri.fsPath]);
+  assert.deepEqual(host.errorMessages, []);
+});
+
+test('exports an untitled buffer whose path matches the export target', async (t) => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'export-problems-untitled-'));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: { includeSummary: false },
+    diagnosticEntries: [
+      [TestUri.file(path.join(workspaceRoot, 'problems.md')), [{
+        severity: 1,
+        range: createRange(),
+        message: 'Stale problem from the previous export',
+      }]],
+      // Same path, different scheme: an unsaved buffer is never the export target.
+      [new TestUri('untitled', path.join(workspaceRoot, 'problems.md')), [{
+        severity: 0,
+        range: createRange(),
+        message: 'Unsaved buffer problem',
+      }]],
+    ],
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  const written = await readFile(path.join(workspaceRoot, 'problems.md'), 'utf8');
+  assert.ok(written.includes('Unsaved buffer problem'));
+  assert.ok(!written.includes('Stale problem from the previous export'));
 });
