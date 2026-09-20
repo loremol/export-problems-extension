@@ -3,9 +3,10 @@
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/loremol.export-problems-to-markdown.svg)](https://marketplace.visualstudio.com/items?itemName=loremol.export-problems-to-markdown)
 [![Open VSX Registry](https://img.shields.io/open-vsx/v/loremol/export-problems-to-markdown?label=Open%20VSX)](https://open-vsx.org/extension/loremol/export-problems-to-markdown)
 
-Export diagnostics from the VS Code or VSCodium Problems panel to a Markdown file. You can choose which problems to include, how to group them, and where to save the result.
+Export diagnostics from the VS Code or VSCodium Problems panel to Markdown, in a file or in the clipboard. You can choose which problems to include, how to group them, and where to save the result.
 
 ## Features
+
 - Export errors, warnings, information, and hints from the entire workspace.
 - Include the line and column, severity, source, code, and message for each problem.
 - Group problems by file or severity, or place them in a single table.
@@ -17,6 +18,7 @@ Export diagnostics from the VS Code or VSCodium Problems panel to a Markdown fil
 See [Settings](#settings) for all options.
 
 ## Usage
+
 1. Open the Command Palette
 2. Run **Export Problems to Markdown**.
 
@@ -31,11 +33,8 @@ Example output with the default settings:
 - **Line 30:1** Warning [eslint, no-unused-vars]: 'foo' is declared but never used.
 ```
 
-The `# Problems` title comes from `exportProblems.includeSummary` and
-`exportProblems.summaryTitle`. Turning the summary off promotes the file heading
-to `# src/index.ts`.
-
 ## Settings
+
 | Setting | Type | Default |
 | --- | --- | --- |
 | `exportProblems.minimumSeverity` | `Hint` \| `Information` \| `Warning` \| `Error` | `Hint` |
@@ -51,12 +50,20 @@ to `# src/index.ts`.
 | `exportProblems.openAfterExport` | `boolean` | `true` |
 
 ### Grouping with `groupBy`
-- `file`: one heading per file (`## <path>` by default beneath the summary, or `# <path>` when it is disabled).
-- `severity`: one heading per severity (`## Errors` by default beneath the summary, or `# Errors` when it is disabled), with the file path in each entry.
+
+- `file`: one heading per file.
+- `severity`: one heading per severity.
 - `flat-table`: a single Markdown table, one row per diagnostic.
 
+### Summary
+
+By enabling `includeSummary` and `summaryTitle` you get an H1 header named after `summaryTitle`. The other two options `includeExportDate` and `includeProblemCount` enable the writing of some informative data under the summary header. They are disabled by default. 
+
 ## Development commands
-- `npm ci`
-- `npm run compile`
-- `npm test`
-- `npm run package`
+
+```sh
+npm ci
+npm run compile
+npm test
+npm run package
+```
