@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import { createRange, TestUri } from './vscodeMock';
-import { activateExtension, createVscode, loadExtension } from './exportHost';
+import {
+  activateExtension,
+  createVscode,
+  type ExportConfiguration,
+  loadExtension,
+} from './exportHost';
 
 test('keeps the summary when includeSummary is not a boolean', async () => {
   const workspaceRoot = path.join(tmpdir(), 'export-problems-boolean-summary');
@@ -111,4 +116,70 @@ test('opens the export when openAfterExport is not a boolean', async () => {
 
   assert.deepEqual(host.openedDocuments.map((uri) => uri.fsPath), [selectedUri.fsPath]);
   assert.deepEqual(host.shownDocuments.map((uri) => uri.fsPath), [selectedUri.fsPath]);
+});
+
+const fileLayoutExport = [
+  '# source.ts',
+  '',
+  '- **Line 1:1** Error: Example problem',
+  '',
+].join('\n');
+
+test('falls back to the file layout for a groupBy outside the enum', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-groupby-unknown');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      outputMode: 'clipboard',
+      includeSummary: false,
+      groupBy: 'tree' as unknown as ExportConfiguration['groupBy'],
+    },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.getClipboardText(), fileLayoutExport);
+});
+
+test('falls back to the file layout for a non-string groupBy', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-groupby-number');
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      outputMode: 'clipboard',
+      includeSummary: false,
+      groupBy: 42 as unknown as ExportConfiguration['groupBy'],
+    },
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.getClipboardText(), fileLayoutExport);
+});
+
+test('opens the save dialog for an outputMode outside the enum', async () => {
+  const workspaceRoot = path.join(tmpdir(), 'export-problems-outputmode-unknown');
+  const selectedUri = TestUri.file(path.join(workspaceRoot, 'chosen.md'));
+  const host = createVscode(workspaceRoot, 'problems.md', {
+    configuration: {
+      includeSummary: false,
+      openAfterExport: false,
+      outputMode: 'email' as unknown as ExportConfiguration['outputMode'],
+    },
+    saveDialogResult: selectedUri,
+  });
+  const extension = loadExtension(host.vscode);
+  activateExtension(extension);
+
+  await host.getRegisteredCommand()();
+
+  assert.equal(host.saveDialogs.length, 1);
+  assert.equal(
+    host.saveDialogs[0].defaultUri?.fsPath,
+    path.join(workspaceRoot, 'problems.md')
+  );
+  assert.deepEqual(host.writes.map((write) => write.uri.fsPath), [selectedUri.fsPath]);
+  assert.deepEqual(host.errorMessages, []);
 });
