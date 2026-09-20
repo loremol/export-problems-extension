@@ -101,6 +101,7 @@ export type TestHost = {
   openedDocuments: vscode.Uri[];
   shownDocuments: vscode.Uri[];
   getRegisteredCommand(): () => unknown;
+  getRegisteredCommandName(): string;
   getClipboardText(): string | undefined;
 };
 
@@ -128,6 +129,7 @@ export function createVscode(
   const configuration: Partial<ExportConfiguration> = overrides.configuration ?? {};
   let clipboardText: string | undefined;
   let registeredCommand: (() => unknown) | undefined;
+  let registeredCommandName: string | undefined;
 
   const vscodeApi: VscodeApi = {
     DiagnosticSeverity: {
@@ -138,7 +140,8 @@ export function createVscode(
     },
     Uri: TestUri,
     commands: {
-      registerCommand(_name, command) {
+      registerCommand(name, command) {
+        registeredCommandName = name;
         registeredCommand = command;
         return { dispose() {} };
       },
@@ -233,6 +236,10 @@ export function createVscode(
       assert.ok(registeredCommand, 'extension command was not registered');
       return registeredCommand;
     },
+    getRegisteredCommandName() {
+      assert.ok(registeredCommandName, 'extension command was not registered');
+      return registeredCommandName;
+    },
     getClipboardText() {
       return clipboardText;
     },
@@ -267,8 +274,11 @@ export function loadExtension(vscodeApi: VscodeApi): ExtensionModule {
   }
 }
 
-export function activateExtension(extension: ExtensionModule): void {
-  extension.activate({ subscriptions: [] });
+// Returns the subscriptions array so callers can assert what activation registered.
+export function activateExtension(extension: ExtensionModule): vscode.Disposable[] {
+  const subscriptions: vscode.Disposable[] = [];
+  extension.activate({ subscriptions });
+  return subscriptions;
 }
 
 // Silences the boundary's Extension Host logging, which would otherwise print stacks on a passing run
