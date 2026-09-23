@@ -7,11 +7,11 @@ import {
   ExportStepError,
   formatExportFailure,
   runExportStep,
-} from '../src/exportErrors';
+} from '../src/export/exportErrors';
 
 test('has no VS Code module dependency', () => {
   const source = readFileSync(
-    path.resolve(__dirname, '../../src/exportErrors.ts'),
+    path.resolve(__dirname, '../../src/export/exportErrors.ts'),
     'utf8'
   );
 

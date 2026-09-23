@@ -19,7 +19,7 @@ import {
   resolveSafeWorkspaceTarget,
   selectWorkspaceFileTarget,
   writeFileToSafeWorkspaceTarget,
-} from '../src/workspacePathSecurity';
+} from '../src/export/output/workspacePathSecurity';
 
 function isPermissionError(error: unknown): error is NodeJS.ErrnoException {
   return (

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { formatExportFailure } from './exportErrors';
-import { exportProblemsToMarkdown } from './exportProblemsToMarkdown';
+import { formatExportFailure } from './export/exportErrors';
+import { exportProblemsToMarkdown } from './export/exportProblemsToMarkdown';
 
 // Run the export and report failures instead of leaving VS Code with a rejected command.
 async function runExportCommand(): Promise<void> {

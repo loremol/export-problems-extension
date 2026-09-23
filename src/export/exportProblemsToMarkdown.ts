@@ -1,94 +1,15 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { readOptions } from './configuration';
 import { describeError, endSentence, runExportStep } from './exportErrors';
+import type { DiagnosticEntry, ExportOptions } from './model';
+import { formatSeverityLabel, isKnownSeverity, severitySections } from './severity';
 import {
   getSafeDialogFileName,
   resolveSafeWorkspaceTarget,
   selectWorkspaceFileTarget,
   writeFileToSafeWorkspaceTarget,
-} from './workspacePathSecurity';
-
-const severityLabels: Record<vscode.DiagnosticSeverity, string> = {
-  [vscode.DiagnosticSeverity.Error]: 'Error',
-  [vscode.DiagnosticSeverity.Warning]: 'Warning',
-  [vscode.DiagnosticSeverity.Information]: 'Information',
-  [vscode.DiagnosticSeverity.Hint]: 'Hint',
-};
-
-const severityHeadings: Record<vscode.DiagnosticSeverity, string> = {
-  [vscode.DiagnosticSeverity.Error]: 'Errors',
-  [vscode.DiagnosticSeverity.Warning]: 'Warnings',
-  [vscode.DiagnosticSeverity.Information]: 'Information',
-  [vscode.DiagnosticSeverity.Hint]: 'Hints',
-};
-
-const severityOrder: vscode.DiagnosticSeverity[] = [
-  vscode.DiagnosticSeverity.Error,
-  vscode.DiagnosticSeverity.Warning,
-  vscode.DiagnosticSeverity.Information,
-  vscode.DiagnosticSeverity.Hint,
-];
-
-// TypeScript erases enum constraints at runtime. Diagnostics from other extensions can therefore
-// carry a severity outside the four declared values.
-const unknownSeverityLabel = 'Unknown severity';
-const unknownSeverityHeading = 'Unknown severities';
-
-// Check whether VS Code declares this severity.
-function isKnownSeverity(severity: vscode.DiagnosticSeverity): boolean {
-  return severityOrder.includes(severity);
-}
-
-// Use a shared fallback label for severities outside the declared range.
-function formatSeverityLabel(severity: vscode.DiagnosticSeverity): string {
-  return isKnownSeverity(severity) ? severityLabels[severity] : unknownSeverityLabel;
-}
-
-// Put known severity sections first and collect unrecognized values in the last section.
-const severitySections: ReadonlyArray<{
-  heading: string;
-  includesSeverity: (severity: vscode.DiagnosticSeverity) => boolean;
-}> = [
-  ...severityOrder.map((sectionSeverity) => ({
-    heading: severityHeadings[sectionSeverity],
-    includesSeverity: (severity: vscode.DiagnosticSeverity) => severity === sectionSeverity,
-  })),
-  {
-    heading: unknownSeverityHeading,
-    includesSeverity: (severity: vscode.DiagnosticSeverity) => !isKnownSeverity(severity),
-  },
-];
-
-const severityThresholds: Record<string, vscode.DiagnosticSeverity> = {
-  Error: vscode.DiagnosticSeverity.Error,
-  Warning: vscode.DiagnosticSeverity.Warning,
-  Information: vscode.DiagnosticSeverity.Information,
-  Hint: vscode.DiagnosticSeverity.Hint,
-};
-
-// Look up configured severity names without reading inherited properties.
-function readSeverityThreshold(severityName: string): vscode.DiagnosticSeverity {
-  return Object.hasOwn(severityThresholds, severityName)
-    ? severityThresholds[severityName]
-    : vscode.DiagnosticSeverity.Hint;
-}
-
-type DiagnosticEntry = [vscode.Uri, vscode.Diagnostic[]];
-
-interface ExportOptions {
-  threshold: vscode.DiagnosticSeverity;
-  minimumSeverityName: string;
-  groupBy: 'file' | 'severity' | 'flat-table';
-  includeSummary: boolean;
-  summaryTitle: string;
-  includeExportDate: boolean;
-  includeProblemCount: boolean;
-  includeSource: boolean;
-  includeColumn: boolean;
-  defaultFileName: string;
-  outputMode: 'save-dialog' | 'workspace-file' | 'clipboard';
-  openAfterExport: boolean;
-}
+} from './output/workspacePathSecurity';
 
 type OutputTarget =
   | {
@@ -98,49 +19,6 @@ type OutputTarget =
       fallbackUri: vscode.Uri;
     }
   | { kind: 'selected'; uri: vscode.Uri };
-
-// Read a string setting, or use its default when the stored value has another type.
-function readStringSetting<T extends string>(
-  config: vscode.WorkspaceConfiguration,
-  section: string,
-  defaultValue: T
-): T {
-  // VS Code stores settings verbatim, so a declared "string" can still read back as any JSON value.
-  const value = config.get<unknown>(section, defaultValue);
-  return typeof value === 'string' ? (value as T) : defaultValue;
-}
-
-// Read a boolean setting, or use its default when the stored value has another type.
-function readBooleanSetting(
-  config: vscode.WorkspaceConfiguration,
-  section: string,
-  defaultValue: boolean
-): boolean {
-  // VS Code stores settings verbatim, so a declared "boolean" can still read back as any JSON value.
-  const value = config.get<unknown>(section, defaultValue);
-  return typeof value === 'boolean' ? value : defaultValue;
-}
-
-// Load the export options from the workspace configuration.
-function readOptions(): ExportOptions {
-  const config = vscode.workspace.getConfiguration('exportProblems');
-  const minimumSeverityName = readStringSetting(config, 'minimumSeverity', 'Hint');
-  const threshold = readSeverityThreshold(minimumSeverityName);
-  return {
-    threshold,
-    minimumSeverityName: severityLabels[threshold],
-    groupBy: readStringSetting<ExportOptions['groupBy']>(config, 'groupBy', 'file'),
-    includeSummary: readBooleanSetting(config, 'includeSummary', true),
-    summaryTitle: readStringSetting(config, 'summaryTitle', 'Problems'),
-    includeExportDate: readBooleanSetting(config, 'includeExportDate', false),
-    includeProblemCount: readBooleanSetting(config, 'includeProblemCount', false),
-    includeSource: readBooleanSetting(config, 'includeSource', true),
-    includeColumn: readBooleanSetting(config, 'includeColumn', true),
-    defaultFileName: readStringSetting(config, 'defaultFileName', 'problems.md'),
-    outputMode: readStringSetting<ExportOptions['outputMode']>(config, 'outputMode', 'save-dialog'),
-    openAfterExport: readBooleanSetting(config, 'openAfterExport', true),
-  };
-}
 
 // Relative paths need folder names when the window contains multiple workspaces.
 function hasMultipleWorkspaceFolders(): boolean {
