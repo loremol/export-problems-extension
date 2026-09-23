@@ -258,6 +258,7 @@ export function loadExtension(vscodeApi: VscodeApi): ExtensionModule {
     require.resolve('../src/export/exportProblemsToMarkdown'),
     require.resolve('../src/export/configuration'),
     require.resolve('../src/export/severity'),
+    require.resolve('../src/export/markdown/renderMarkdown'),
   ];
   for (const modulePath of vscodeModulePaths) {
     delete require.cache[modulePath];
