@@ -256,10 +256,12 @@ export function loadExtension(vscodeApi: VscodeApi): ExtensionModule {
   const vscodeModulePaths = [
     extensionPath,
     require.resolve('../src/export/exportProblemsToMarkdown'),
-    require.resolve('../src/export/diagnostics'),
     require.resolve('../src/export/configuration'),
     require.resolve('../src/export/severity'),
     require.resolve('../src/export/markdown/renderMarkdown'),
+    require.resolve('../src/export/diagnostics'),
+    require.resolve('../src/export/output/deliverMarkdown'),
+    require.resolve('../src/export/output/selectOutputTarget'),
   ];
   for (const modulePath of vscodeModulePaths) {
     delete require.cache[modulePath];
